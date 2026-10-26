@@ -30,6 +30,7 @@
       <button data-t="today" class="on">วันนี้</button>
       <button data-t="report">รายงานเข้า-ออก</button>
       <button data-t="shifts">กะ &amp; มาสาย/ขาด <span id="rqBadge" class="badge hidden">0</span></button>
+      <button data-t="roster">ตารางกะ</button>
       <button data-t="devices">คำขอเปลี่ยนเครื่อง <span id="devBadge" class="badge hidden">0</span></button>
       <button data-t="users">พนักงาน</button>
       <button data-t="branches">สาขา</button>
@@ -92,9 +93,10 @@
           <label>สาขา<select id="aBranch"></select></label>
           <label>แสดงรายวัน<select id="aShow"><option value="issues">เฉพาะที่ผิดปกติ</option><option value="all">ทุกวัน</option></select></label>
           <label>ค้นหาชื่อ<input id="aSearch" placeholder="ชื่อ / ชื่อเล่น"></label>
+          <label>รายชื่อ<select id="aAcct"><option value="acct">เฉพาะที่มีบัญชีในระบบ</option><option value="all">ทั้งหมด (รวมที่ลบ/ยังไม่มีบัญชี)</option></select></label>
         </div>
         <div class="row" style="max-width:620px">
-          <button id="btnAtt" class="btn primary">คำนวณ</button>
+          <button id="btnAtt" class="btn primary">ค้นหา</button>
           <button id="btnAttCsvSum" class="btn">Export สรุปรายคน</button>
           <button id="btnAttCsvDay" class="btn">Export รายวัน</button>
         </div>
@@ -113,7 +115,7 @@
         <div class="tbl-wrap"><table id="tShiftReq"></table></div>
       </div>
       <div class="card"><h3>สรุปรายคน</h3><div class="tbl-wrap att-table"><table id="tAttSum"></table></div><div class="att-cards" id="attCards"></div></div>
-      <div class="card"><h3>รายละเอียดรายวัน</h3><div class="tbl-wrap"><table id="tAttDay"></table></div></div>
+      <div class="card"><h3>รายละเอียดรายวัน</h3><div class="tbl-wrap scroll-y"><table id="tAttDay"></table></div></div>
       <div class="card">
         <h3>อัปโหลดตารางกะ (Excel)</h3>
         <p class="muted">ใช้ไฟล์รูปแบบเดียวกับ "ตารางกะ_Oct 2026" (หัวตาราง Store / ชื่อ / นามสกุล / ชื่อเล่น / ตำแหน่ง / เบอร์โทร / วันที่) — อัปโหลดซ้ำได้ ระบบจะเขียนทับเดือนเดิม</p>
@@ -126,11 +128,28 @@
       </div>
     </div>
 
+    <!-- ตารางกะ (ภาพรวม) -->
+    <div id="t-roster" class="hidden">
+      <div class="card">
+        <h3>ตารางกะ (ภาพรวมทั้งเดือน)</h3>
+        <div class="grid">
+          <label>เดือน<input id="roMonth" type="month"></label>
+          <label>สาขา<select id="roBranch"></select></label>
+          <label>ค้นหาชื่อ<input id="roSearch" placeholder="ชื่อ / ชื่อเล่น"></label>
+          <label>รายชื่อ<select id="roAcct"><option value="acct">เฉพาะที่มีบัญชีในระบบ</option><option value="all">ทั้งหมด</option></select></label>
+        </div>
+        <div class="row" style="max-width:220px"><button id="btnRoster" class="btn primary">ค้นหา</button></div>
+        <p class="msg" id="roMsg"></p>
+        <div class="ro-legend"><span><i class="r-work"></i>กะทำงาน (ตัวเลข = ชั่วโมงเข้างาน)</span><span><i class="r-off"></i>H วันหยุด</span><span><i class="r-leave"></i>ลา / พักร้อน / อบรม</span><span><i class="r-edit"></i>แก้/สลับแล้ว</span><span><i class="r-pend"></i>รออนุมัติ (→ กะที่ขอ)</span></div>
+        <div class="tbl-wrap scroll-y roster"><table id="tRoster"></table></div>
+      </div>
+    </div>
+
     <!-- คำขอเปลี่ยนเครื่อง -->
     <div id="t-devices" class="hidden">
       <div class="card">
-        <h3>คำขอเปลี่ยนเครื่อง / ใช้คอมพิวเตอร์</h3>
-        <p class="muted">มือถือ 1 เครื่องผูกได้เอง 2 ที่ (เช่น Safari + ไอคอนหน้าจอโฮม) — คำขอที่ขึ้นที่นี่คือเกิน 2 ที่ / เปลี่ยนมือถือ / ใช้คอมพิวเตอร์ · อนุมัติแล้วที่เดิมทั้งหมดจะใช้ไม่ได้ (ผูกที่ที่ 2 ใหม่ได้เอง)</p>
+        <h3>คำขอเปลี่ยนเครื่อง</h3>
+        <p class="muted">มือถือ 1 เครื่องผูกได้เอง 2 ที่ (เช่น Safari + ไอคอนหน้าจอโฮม) — คำขอที่ขึ้นที่นี่คือเกิน 2 ที่ / เปลี่ยนมือถือ / ล้างข้อมูลเบราว์เซอร์ · พนักงานใช้ได้เฉพาะมือถือ · อนุมัติแล้วที่เดิมทั้งหมดจะใช้ไม่ได้ (ผูกที่ที่ 2 ใหม่ได้เอง)</p>
         <div class="tbl-wrap"><table id="tDev"></table></div>
         <div class="row" style="max-width:220px"><button id="btnDevReload" class="btn sm">รีเฟรช</button></div>
       </div>
