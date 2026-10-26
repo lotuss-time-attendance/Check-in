@@ -232,6 +232,7 @@ async function loadUsers() {
         ${u.lastType === "in" ? `<button class="btn sm" data-uunlock="${u.uid}" title="กรณีพนักงานลืมออกงาน แล้วต้องเข้างานวันใหม่">ปลดล็อกให้กดเข้างานได้</button>` : ""}
         <button class="btn sm" data-upw="${u.uid}">ส่งลิงก์ตั้งรหัสใหม่</button>
         <button class="btn sm ${u.active === false ? "" : "danger"}" data-uact="${u.uid}">${u.active === false ? "เปิดใช้งาน" : "ระงับ"}</button>
+        ${u.active === false && isRM() && u.uid !== me.uid ? `<button class="btn sm danger" data-udel="${u.uid}" title="ลบรายชื่อออกจากระบบ (ประวัติเข้า-ออกงานเดิมยังอยู่)">ลบรายชื่อ</button>` : ""}
       </td></tr>`).join("");
 }
 // รายละเอียดเครื่องที่ผูก (ระบบ/รุ่น/ช่องทาง) — เบอร์โทรจากซิม และรุ่น iPhone อ่านจากเว็บไม่ได้
@@ -335,7 +336,7 @@ $("tUsers").addEventListener("click", async (e) => {
     } catch (err) { alert(errText(err)); }
     return;
   }
-  const u = users.find((x) => x.uid === (t.uedit || t.ureset || t.upw || t.uact || t.uunlock));
+  const u = users.find((x) => x.uid === (t.uedit || t.ureset || t.upw || t.uact || t.uunlock || t.udel));
   if (!u) return;
   try {
     if (t.uedit) {
@@ -355,6 +356,10 @@ $("tUsers").addEventListener("click", async (e) => {
       await sendPasswordResetEmail(auth, u.email); alert(`ส่งลิงก์ตั้งรหัสผ่านใหม่ไปที่ ${u.email} แล้ว`);
     } else if (t.uact) {
       await updateDoc(doc(db, "users", u.uid), { active: u.active === false }); loadUsers();
+    } else if (t.udel) {
+      if (u.active !== false) return alert("ระงับรายชื่อนี้ก่อน แล้วจึงลบ");
+      if (!confirm(`ลบ "${u.name || u.email || u.uid}" ออกจากรายชื่อพนักงาน?\n• ประวัติเข้า-ออกงานเดิมยังอยู่ในรายงาน\n• ลบแล้วกู้คืนไม่ได้`)) return;
+      await deleteDoc(doc(db, "users", u.uid)); loadUsers();
     }
   } catch (err) { alert(errText(err)); }
 });

@@ -220,4 +220,72 @@ export const TENANTS = {
       appId: "1:598842047889:web:ab43dabeb6be0625e22e30"
     }
   },
+
+  // ---------- N1 · Panitsupa T. ----------
+  "n1": {
+    name: "AM Check-In · Panitsupa T.",
+    region: "North",
+    ownerEmail: "panit.ice1979@gmail.com",
+    multiZone: false,
+    defaultRadius: 200,
+    firebaseConfig: {
+      apiKey: "AIzaSyA2Vp3ReJCQtD2iqEzrhMPkuJJNFXMpkpU",
+      authDomain: "checkin-n1.firebaseapp.com",
+      projectId: "checkin-n1",
+      storageBucket: "checkin-n1.firebasestorage.app",
+      messagingSenderId: "798169044449",
+      appId: "1:798169044449:web:9e8cf814f1f2b0c4fe6ea0"
+    }
+  },
+
+  // ---------- N2 · Somreuthai P. ----------
+  "n2": {
+    name: "AM Check-In · Somreuthai P.",
+    region: "North",
+    ownerEmail: "somreuthai2432@gmail.com",
+    multiZone: false,
+    defaultRadius: 200,
+    firebaseConfig: {
+      apiKey: "AIzaSyCnZn5ZY_KNcSKtc8YcrwU0mqWWU8KZZ8I",
+      authDomain: "checkin-n2.firebaseapp.com",
+      projectId: "checkin-n2",
+      storageBucket: "checkin-n2.firebasestorage.app",
+      messagingSenderId: "345443997671",
+      appId: "1:345443997671:web:a99040588976803c0c8f42"
+    }
+  },
+
+  // ---------- N3 · Watcharee V. ----------
+  "n3": {
+    name: "AM Check-In · Watcharee V.",
+    region: "North",
+    ownerEmail: "took.watcharee1612@gmail.com",
+    multiZone: false,
+    defaultRadius: 200,
+    firebaseConfig: {
+      apiKey: "AIzaSyCzaQJwaxB5iC3vA29eDJ9l_aEstAF5cSE",
+      authDomain: "checkin-n3.firebaseapp.com",
+      projectId: "checkin-n3",
+      storageBucket: "checkin-n3.firebasestorage.app",
+      messagingSenderId: "790702741399",
+      appId: "1:790702741399:web:9779d39d3c829b248e16d2"
+    }
+  },
+
+  // ---------- N4 · Kannika O. ----------
+  "n4": {
+    name: "AM Check-In · Kannika O.",
+    region: "North",
+    ownerEmail: "kannika.onchim8080@gmail.com",
+    multiZone: false,
+    defaultRadius: 200,
+    firebaseConfig: {
+      apiKey: "AIzaSyAuSByoSej_LvZzFLQWV2PDqTgCKllJNhE",
+      authDomain: "checkin-n4.firebaseapp.com",
+      projectId: "checkin-n4",
+      storageBucket: "checkin-n4.firebasestorage.app",
+      messagingSenderId: "754877104628",
+      appId: "1:754877104628:web:d4c2ea7c20a8722e0139a1"
+    }
+  },
 };
