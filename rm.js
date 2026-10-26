@@ -95,7 +95,7 @@ async function teamData(x, month, fromDay, toDay) {
   const ovMap = new Map(ov.docs.map((d) => [d.id, d.data()]));
   const uidBy = new Map(users.filter((u) => u.phoneKey).map((u) => [u.phoneKey, u]));
   const byUid = new Map();
-  ck.docs.forEach((d) => { const c = d.data(); if (!c.ts) return; c.t = c.ts.toDate(); (byUid.get(c.uid) || byUid.set(c.uid, []).get(c.uid)).push(c); });
+  ck.docs.forEach((d) => { const c = d.data(); if (!c.ts) return; c.t = c.autoOut && c.outAt ? new Date(c.outAt) : c.ts.toDate(); (byUid.get(c.uid) || byUid.set(c.uid, []).get(c.uid)).push(c); });
   const now = new Date(), people = [], days = [];
   for (const sd of sh.docs) {
     const s = sd.data(), u = uidBy.get(s.phoneKey), list = u ? byUid.get(u.uid) || [] : [];

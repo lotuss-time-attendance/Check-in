@@ -412,7 +412,7 @@ async function fetchCheckins(start, end) {
     const ms = monthsBetween(bkkDay(start), bkkDay(new Date(end.getTime() - 1))).map((m) => `${me.zoneId}_${m}`).slice(0, 10);
     docs = (await getDocs(query(collection(db, "checkins"), where("zoneId", "==", me.zoneId), where("zm", "in", ms)))).docs;
   }
-  return docs.map((d) => ({ id: d.id, ...d.data(), t: d.data().ts ? d.data().ts.toDate() : null })).filter((r) => r.t && r.t >= start && r.t < end);
+  return docs.map((d) => { const x = d.data(); return { id: d.id, ...x, t: x.autoOut && x.outAt ? new Date(x.outAt) : x.ts ? x.ts.toDate() : null }; }).filter((r) => r.t && r.t >= start && r.t < end);
 }
 // ตัวกรองประเภท (เข้า/ออก) ใช้กับ "ทุกรายการ" เท่านั้น — สรุปรายคนต้องเห็นทั้งเข้าและออก
 function filtered(withType = false) {

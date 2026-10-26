@@ -13,7 +13,7 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<header class="bar"><div class="brand"><img src="icons/logo.svg" alt=""><span data-appname>AM Check-In</span></div><button id="btnLogout" class="link hidden">ออกจากระบบ</button></header>
+<header class="bar light"><div class="brand"><img id="brandLogo" class="logo-img" src="icons/lotuss-logo.png" alt="Lotus's" onerror="this.classList.add('hidden');document.getElementById('brandText').classList.remove('hidden')"><span id="brandText" class="hidden" data-appname>AM Check-In</span></div><button id="btnLogout" class="link hidden">ออกจากระบบ</button></header>
 <main class="wrap">
 
   <section id="scInApp" class="card hidden">
@@ -68,17 +68,41 @@
       <label class="chk" style="margin-top:6px"><input type="checkbox" id="demoInRange"> จำลองว่าอยู่ในพื้นที่สาขา (ลองจากที่ไหนก็ได้)</label>
       <div class="row" style="margin-top:6px"><a class="btn sm" href="admin.html" style="text-decoration:none;text-align:center">← กลับหน้าผู้ดูแล</a></div>
     </div>
-    <div class="card">
+    <div id="roundBar" class="round hidden"></div>
+    <div class="card hidden" id="autoCard">
+      <h3 style="color:var(--bad)">⚠️ คุณไม่ได้กดออกงาน</h3>
+      <p id="autoText" class="muted" style="margin:0"></p>
+      <div class="grid2" style="margin-top:10px">
+        <div class="mini"><span class="muted">เข้างาน</span><b id="autoIn">-</b></div>
+        <div class="mini bad"><span>ระบบปิดให้ (12 ชม.)</span><b id="autoOut">-</b></div>
+      </div>
+      <label>เวลาออกงานจริง (แจ้ง AM เพื่อแก้ไข)<input id="autoReal" type="time"></label>
+      <label>เหตุผล <span class="msg err">(จำเป็น — อย่างน้อย 10 ตัวอักษร)</span><textarea id="autoNote" maxlength="200" style="min-height:64px" placeholder="เช่น ลืมกดออก แบตมือถือหมด"></textarea></label>
+      <button id="btnAuto" class="btn primary block" style="margin-top:12px" disabled>ส่งให้ AM และเข้างานวันนี้</button>
+      <p class="msg" id="autoMsg"></p>
+      <p class="muted" style="margin:6px 0 0">รายงานของ AM จะขึ้นว่า "ระบบปิดให้" พร้อมเวลาออกจริงที่คุณแจ้ง</p>
+    </div>
+    <div class="card" id="mainCard">
       <div class="who">
         <div><div id="mName" class="big"></div><div id="mPos" class="muted"></div></div>
+        <div id="mShiftBox" class="shiftbox hidden"><span>กะวันนี้</span><b id="mShiftTime"></b></div>
       </div>
       <div id="mDate" class="muted" style="margin-top:4px"></div>
       <div id="mShift" class="loc wait hidden" style="margin-top:8px"></div>
-      <div class="seg" id="segType"><button data-v="in" class="on">เข้างาน</button><button data-v="out">ออกงาน</button></div>
+      <div class="seg hidden" id="segType"><button data-v="in" class="on">เข้างาน</button><button data-v="out">ออกงาน</button></div>
       <div id="mState" class="muted" style="margin-top:6px"></div>
-      <label>สาขา<select id="mBranch"></select></label>
+      <div id="outHours" class="hours hidden"><span class="muted">ทำงานแล้ว</span><b id="ohTime">-</b><span id="ohSub" class="muted"></span><div class="bar2"><i id="ohBar"></i></div></div>
+      <div class="seg" id="segPlace"><button data-v="branch" class="on">ที่สาขา</button><button data-v="off">นอกสถานที่</button></div>
+      <label id="branchSelWrap" class="hidden">สาขา (โหมดทดลอง)<select id="mBranch"></select></label>
+      <div id="branchLock" class="lockbox"><span class="ic">🔒</span><div><div class="muted" style="font-size:.85rem">สาขาประจำ (ระบบเลือกให้ เปลี่ยนไม่ได้)</div><b id="branchLockName">-</b></div></div>
+      <div id="offBox" class="hidden">
+        <label>ค้นหาสถานที่ (รหัสหรือชื่อสาขา Lotus's)<input id="pSearch" autocomplete="off" placeholder="เช่น 5081 หรือ Lumlookka"></label>
+        <ul id="pList" class="plist"></ul>
+        <label id="pOtherWrap" class="hidden">ระบุสถานที่<input id="pOther" maxlength="80" placeholder="เช่น สำนักงานเขต, ร้านลูกค้า"></label>
+      </div>
+      <div id="map" class="map"></div>
       <div id="locBox" class="loc wait">📍 กำลังหาตำแหน่ง...</div>
-      <label class="chk" id="offWrap"><input type="checkbox" id="mOff"> ทำงานนอกสถานที่ (ไม่ได้อยู่ที่สาขา)</label>
+      <input type="checkbox" id="mOff" class="hidden">
       <div id="noteWrap">
         <label>เหตุผล / หมายเหตุ <span id="noteReq">(ไม่บังคับ)</span></label>
         <div class="chips hidden" id="noteChips">
@@ -125,15 +149,22 @@
       <ul id="rqList" class="list"></ul>
     </div>
 
-    <div class="card">
-      <h3>ประวัติของฉัน (เดือนนี้)</h3>
+    <div class="card" id="schedCard">
+      <h3>ตารางการทำงานของฉัน · <span id="calMonth"></span></h3>
       <div class="stats" id="hStats"></div>
-      <ul id="hList" class="list"><li class="muted">กำลังโหลด...</li></ul>
+      <div class="cal-h"><span>อา</span><span>จ</span><span>อ</span><span>พ</span><span>พฤ</span><span>ศ</span><span>ส</span></div>
+      <div class="cal" id="cal"></div>
+      <div class="cal-legend">
+        <span><i class="c-ok"></i>มาตรงเวลา</span><span><i class="c-late"></i>มาสาย</span><span><i class="c-abs"></i>ขาดงาน</span><span><i class="c-off"></i>วันหยุด</span>
+        <span><i class="c-leave"></i>ลา / พักร้อน</span><span><i class="c-swap"></i>สลับกะ (อนุมัติ)</span><span><i class="c-wait"></i>รออนุมัติ</span><span><i class="c-next"></i>กะที่จะถึง</span>
+      </div>
+      <div id="calDetail" class="caldetail"></div>
+      <ul id="hList" class="list hidden"></ul>
     </div>
   </section>
 </main>
 
-<div id="done" class="overlay hidden"><div class="okcard"><div class="tick">✓</div><div class="big">สำเร็จ</div><div id="doneText" class="muted"></div><img id="donePhoto" class="hidden" alt="" style="width:100%;border-radius:10px;margin:10px 0"><button id="btnDone" class="btn primary">ตกลง</button></div></div>
+<div id="done" class="overlay hidden"><div class="okcard"><div class="tick">✓</div><div class="big">สำเร็จ</div><div id="doneMain" class="done-main"></div><div id="doneText" class="muted"></div><div id="doneBadge"></div><img id="donePhoto" class="hidden" alt="" style="width:100%;border-radius:10px;margin:10px 0"><button id="btnDone" class="btn primary">ตกลง</button></div></div>
 <canvas id="canvas" class="hidden"></canvas>
 <script type="module" src="app.js"></script>
 </body>
