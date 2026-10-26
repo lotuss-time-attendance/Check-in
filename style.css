@@ -191,3 +191,25 @@ th{background:#f4f7fe;color:var(--brand-2)}
 
 .bar{z-index:1000}
 .bar.light{overflow:hidden}
+
+.tbl-wrap.scroll-y{max-height:560px;overflow:auto;border:1px solid var(--line);border-radius:10px}
+.tbl-wrap.scroll-y th{position:sticky;top:0;z-index:2}
+
+/* ตารางกะ (ภาพรวม) */
+.roster table{border-collapse:separate;border-spacing:0;font-size:.82rem}
+.roster th,.roster td{padding:4px 6px;border-bottom:1px solid var(--line);border-right:1px solid #eef1f6;text-align:center}
+.roster th.dd,.roster td{min-width:30px}
+.roster th.we{background:#fff4d6}
+.roster .td{box-shadow:inset 0 0 0 2px var(--accent-2)}
+.roster .sk{position:sticky;background:#fff;z-index:1;text-align:left}
+.roster th.sk{z-index:3;background:#f4f7fe}
+.roster .s1{left:0;min-width:70px}.roster .s2{left:70px;min-width:150px}.roster .s3{left:220px;min-width:70px;border-right:2px solid var(--line)}
+.roster tr:first-child th{top:0}.roster tr:nth-child(2) th{top:29px}
+.roster td small{display:block;font-size:.68rem;color:#8a6100}
+.r-work{background:#fff}.r-off{background:#eef1f6;color:#5f6b85}.r-leave{background:#efe8fb;color:#5b2ea6}.r-unk{background:#fdecea;color:#b42318}.r-none{background:#fafbfc}
+.roster td.r-edit{outline:2px dashed #1E5BD8;outline-offset:-3px;font-weight:700}
+.roster td.r-pend{background:#fff6dc}
+.ro-legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:.82rem;margin:4px 0 10px}
+.ro-legend span{display:flex;align-items:center;gap:6px}
+.ro-legend i{display:inline-block;width:14px;height:14px;border-radius:3px;border:1px solid #c9d3e8}
+.ro-legend i.r-edit{border:2px dashed #1E5BD8}.ro-legend i.r-pend{background:#fff6dc}

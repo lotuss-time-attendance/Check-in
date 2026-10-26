@@ -68,7 +68,7 @@ onAuthStateChanged(auth, async (user) => {
     loadDevices();
     const today = bkkDay();
     $("rFrom").value = today; $("rTo").value = today;
-    $("aMonth").value = today.slice(0, 7); $("sMonth").value = today.slice(0, 7); $("aGrace").textContent = LATE_GRACE_MIN;
+    $("aMonth").value = today.slice(0, 7); $("roMonth").value = today.slice(0, 7); $("sMonth").value = today.slice(0, 7); $("aGrace").textContent = LATE_GRACE_MIN;
     runToday(); loadShiftRequests();
   } catch (e) { screen("scLogin"); msg("liMsg", e && e.code === "permission-denied" ? "ล็อกอินได้แต่ฐานข้อมูลปฏิเสธการอ่าน — ตรวจว่าวาง Rules ล่าสุดใน Firebase และกด Publish แล้ว" : errText(e)); }
 });
@@ -92,11 +92,12 @@ $("btnLogout").onclick = () => signOut(auth);
 $("tabs").addEventListener("click", (e) => {
   const b = e.target.closest("button"); if (!b) return;
   [...$("tabs").children].forEach((x) => x.classList.toggle("on", x === b));
-  ["today", "report", "shifts", "devices", "users", "branches", "zones", "tools"].forEach((t) => $("t-" + t).classList.toggle("hidden", t !== b.dataset.t));
+  ["today", "report", "shifts", "roster", "devices", "users", "branches", "zones", "tools"].forEach((t) => $("t-" + t).classList.toggle("hidden", t !== b.dataset.t));
   if (b.dataset.t === "today") runToday();
   if (b.dataset.t === "report" && !reportLoaded) { reportLoaded = true; runReport(); }
   if (b.dataset.t === "shifts") { loadShiftRequests(); if (!att.sums.length) runAtt(); }
   if (b.dataset.t === "devices") loadDevices();
+  if (b.dataset.t === "roster" && roster.month !== $("roMonth").value) runRoster();
   if (b.dataset.t === "zones") loadZones();
 });
 
@@ -128,6 +129,7 @@ async function loadBranches() {
   const opts = branches.map((b) => `<option value="${esc(b.id)}">${esc(b.name)} (${esc(b.id)})</option>`).join("");
   $("rBranch").innerHTML = `<option value="">ทุกสาขา</option>` + opts;
   $("aBranch").innerHTML = `<option value="">ทุกสาขา</option>` + opts;
+  $("roBranch").innerHTML = `<option value="">ทุกสาขา</option>` + opts;
   $("uBranch").innerHTML = `<option value="">— ไม่ระบุ —</option>` + opts;
   $("tBranches").innerHTML = `<tr><th>รหัส</th><th>ชื่อสาขา</th><th>เขต</th><th>พิกัด</th><th>รัศมี</th><th>แผนที่</th><th></th></tr>` +
     branches.map((b) => {
@@ -220,9 +222,9 @@ async function loadUsers() {
   users = (await getDocs(uq)).docs.map((d) => ({ uid: d.id, ...d.data() }))
     .sort((a, b) => String(a.name).localeCompare(String(b.name), "th"));
   $("uCount").textContent = users.length;
-  $("tUsers").innerHTML = `<tr><th>ชื่อ</th><th>ชื่อเล่น</th><th>รหัส</th><th>อีเมล</th><th>เบอร์โทร</th><th>ตำแหน่ง</th><th>สาขาประจำ</th><th>เขต</th><th>สิทธิ์</th><th>สถานะ</th><th>เครื่อง</th><th></th></tr>` +
+  $("tUsers").innerHTML = `<tr><th>ชื่อ</th><th>ชื่อเล่น</th><th>รหัส</th><th>อีเมล</th><th>เบอร์โทร</th><th>ตำแหน่ง</th><th>สาขาประจำ</th><th>สิทธิ์</th><th>สถานะ</th><th>เครื่อง</th><th></th></tr>` +
     users.map((u) => `<tr>
-      <td>${esc(u.name)}</td><td>${esc(u.nickname)}</td><td>${esc(u.empId)}</td><td>${esc(u.email)}</td><td>${esc(u.phone)}</td><td>${esc(u.position)}</td><td>${esc(bName(u.branchId))}</td><td>${u.zoneId ? esc(zName(u.zoneId)) : "-"}</td>
+      <td>${esc(u.name)}</td><td>${esc(u.nickname)}</td><td>${esc(u.empId)}</td><td>${esc(u.email)}</td><td>${esc(u.phone)}</td><td>${esc(u.position)}</td><td>${esc(bName(u.branchId))}</td>
       <td>${ROLE_LABEL[u.role] || "พนักงาน"}</td>
       <td>${u.active === false ? `<span class="tag off">ระงับ</span>` : u.mustChangePassword ? `<span class="tag warn">ยังไม่เข้าครั้งแรก</span>` : `<span class="tag in">ใช้งาน</span>`}</td>
       <td>${devCell(u)}</td>
@@ -855,7 +857,7 @@ async function attendanceCore(month, fromDay, toDay) {
 async function runAtt() {
   const month = $("aMonth").value;
   if (!month) return msg("aMsg", "เลือกเดือน");
-  busy($("btnAtt"), true, "กำลังคำนวณ...");
+  busy($("btnAtt"), true, "กำลังค้นหา...");
   try {
     const [y, mo] = month.split("-").map(Number);
     const last = new Date(Date.UTC(y, mo, 0)).toISOString().slice(0, 10);
@@ -870,7 +872,10 @@ async function runAtt() {
 function attFiltered() {
   const br = $("aBranch").value, s = $("aSearch").value.trim().toLowerCase(), z = isRM() ? $("aZone").value : "";
   const ok = (r) => (!z || r.zoneId === z) && (!br || r.branchId === br) && (!s || `${r.name} ${r.nickname}`.toLowerCase().includes(s));
-  return { sums: att.sums.filter(ok), days: att.days.filter(ok) };
+  // ซ่อนรายชื่อที่ไม่มีบัญชี (ถูกลบ/ยังไม่สร้าง) — ข้อมูลยังอยู่ใน Export และรายงานเข้า-ออก
+  const acct = $("aAcct").value !== "all", has = new Set(att.sums.filter((x) => x.hasAccount).map((x) => x.key));
+  const ok2 = (r) => ok(r) && (!acct || has.has(r.key));
+  return { sums: att.sums.filter(ok2), days: att.days.filter(ok2) };
 }
 const codeCell = (r) => `${esc(displayCode(r.code))}${r.edited ? ` <span class="tag offsite" title="แก้/สลับแล้ว">แก้</span>` : ""} <button class="btn sm" data-edit="${esc(r.key)}|${r.day}|${esc(r.phoneKey)}|${esc(r.zoneId)}" title="แก้กะวันนี้">✏️</button>`;
 function renderAtt() {
@@ -902,7 +907,7 @@ function renderAtt() {
       || `<tr><td class="muted" colspan="8">${showAll ? "ไม่มีข้อมูล" : "ไม่มีรายการผิดปกติ"}</td></tr>`);
 }
 $("btnAtt").onclick = runAtt;
-["aBranch", "aShow", "aZone"].forEach((i) => $(i).addEventListener("change", renderAtt));
+["aBranch", "aShow", "aZone", "aAcct"].forEach((i) => $(i).addEventListener("change", renderAtt));
 $("aMonth").addEventListener("change", runAtt);
 $("aSearch").addEventListener("input", renderAtt);
 
@@ -1184,3 +1189,57 @@ $("btnBackfill").onclick = async () => {
   } catch (e) { msg("bfMsg", errText(e)); }
   finally { busy($("btnBackfill"), false); }
 };
+
+/* ================= ตารางกะ (ภาพรวม แบบไฟล์ Excel) ================= */
+// ข้อมูลล่าสุด: ตารางที่อัปโหลด + กะที่ AM แก้ / พนักงานขอสลับที่อนุมัติแล้ว (กรอบน้ำเงิน) + คำขอที่รออนุมัติ (สีเหลือง)
+let roster = { month: "", rows: [], pend: new Map() };
+const WD = ["อา", "จ", "อ", "พ", "พฤ", "ศ", "ส"];
+async function runRoster() {
+  const month = $("roMonth").value; if (!month) return;
+  busy($("btnRoster"), true, "กำลังโหลด...");
+  try {
+    const [rows] = await Promise.all([loadShiftDocs(month), loadShiftRequests()]);
+    const pend = new Map();
+    (rqRows || []).forEach((r) => Object.entries(r.changes || {}).forEach(([d, c]) => { if (d.startsWith(month)) pend.set(`${r.phoneKey}|${d}`, c); }));
+    const hasAcct = new Set(users.filter((u) => u.phoneKey).map((u) => u.phoneKey));
+    roster = { month, rows: rows.map((r) => ({ ...r, hasAcct: hasAcct.has(r.phoneKey) })), pend };
+    msg("roMsg", rows.length ? `${rows.length} คน · อัปเดต ${fmtDateTime(new Date())}` : `ยังไม่มีตารางกะเดือน ${month}`, rows.length ? "ok" : "err");
+    renderRoster();
+  } catch (e) { msg("roMsg", errText(e)); }
+  finally { busy($("btnRoster"), false); }
+}
+function rosterCls(code) {
+  const i = shiftInfo(code);
+  if (!normCode(code)) return "r-none";
+  if (!i) return "r-unk";
+  if (i.off) return /วันหยุด/.test(i.off) ? "r-off" : "r-leave";
+  return "r-work";
+}
+function renderRoster() {
+  const { month, rows, pend } = roster; if (!month) return;
+  const [y, m] = month.split("-").map(Number), last = new Date(Date.UTC(y, m, 0)).getUTCDate(), today = bkkDay();
+  const br = $("roBranch").value, q = $("roSearch").value.trim().toLowerCase(), acct = $("roAcct").value !== "all";
+  const list = rows.filter((r) => (!br || r.branchId === br) && (!q || `${r.name} ${r.nickname || ""}`.toLowerCase().includes(q)) && (!acct || r.hasAcct))
+    .sort((a, b) => String(a.store).localeCompare(String(b.store), "th") || String(a.name).localeCompare(String(b.name), "th"));
+  const ds = Array.from({ length: last }, (_, i) => `${month}-${String(i + 1).padStart(2, "0")}`);
+  const wd = (d) => new Date(d + "T12:00:00+07:00").getDay();
+  const head1 = `<tr><th class="sk s1" rowspan="2">Store</th><th class="sk s2" rowspan="2">ชื่อ</th><th class="sk s3" rowspan="2">ชื่อเล่น</th><th rowspan="2">ตำแหน่ง</th>` +
+    ds.map((d, i) => `<th class="dd${wd(d) === 0 || wd(d) === 6 ? " we" : ""}${d === today ? " td" : ""}">${i + 1}</th>`).join("") + `<th rowspan="2">ทำงาน</th><th rowspan="2">หยุด/ลา</th></tr>`;
+  const head2 = `<tr>${ds.map((d) => `<th class="dd wdn${wd(d) === 0 || wd(d) === 6 ? " we" : ""}${d === today ? " td" : ""}">${WD[wd(d)]}</th>`).join("")}</tr>`;
+  const body = list.map((r) => {
+    let w = 0, o = 0;
+    const cells = ds.map((d) => {
+      const code = (r.days || {})[d] || "", i = shiftInfo(code), p = pend.get(`${r.phoneKey}|${d}`);
+      if (i && !i.off) w++; else if (i && i.off) o++;
+      const cls = [rosterCls(code), r.edited.includes(d) ? "r-edit" : "", p !== undefined ? "r-pend" : "", d === today ? "td" : ""].filter(Boolean).join(" ");
+      const tip = `${d} · ${shiftLabel(code)}${r.edited.includes(d) ? " · แก้/สลับแล้ว" : ""}${p !== undefined ? ` · รออนุมัติ → ${shiftLabel(p)}` : ""}`;
+      return `<td class="${cls}" title="${esc(tip)}">${esc(normCode(code) ? displayCode(code).replace("วันหยุด", "H").replace("พักร้อน", "V").replace("ลาอื่นๆ", "OL").replace("อบรม", "T") : "")}${p !== undefined ? `<small>→${esc(displayCode(p).replace("วันหยุด", "H"))}</small>` : ""}</td>`;
+    }).join("");
+    return `<tr><td class="sk s1">${esc(r.store || r.branchId || "")}</td><td class="sk s2">${esc(r.name)}${r.hasAcct ? "" : ` <span class="tag warn">ไม่มีบัญชี</span>`}</td><td class="sk s3">${esc(r.nickname || "")}</td><td>${esc(r.position || "")}</td>${cells}<td><b>${w}</b></td><td>${o}</td></tr>`;
+  }).join("");
+  $("tRoster").innerHTML = head1 + head2 + (body || `<tr><td colspan="${last + 6}" class="muted">ไม่มีข้อมูล</td></tr>`);
+}
+$("btnRoster").onclick = runRoster;
+["roBranch", "roAcct"].forEach((i) => $(i).addEventListener("change", renderRoster));
+$("roSearch").addEventListener("input", renderRoster);
+$("roMonth").addEventListener("change", runRoster);
