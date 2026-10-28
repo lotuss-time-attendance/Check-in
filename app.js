@@ -175,6 +175,7 @@ async function enterMain() {
   startGeo();
   loadToday();
   await loadShift();
+  applyDayBranch();
   checkAutoOut();
   loadRequests();
   loadHistory();
@@ -262,12 +263,30 @@ async function loadShift() {
   el.classList.add("hidden");
   fillRequestForm(); renderCal(); showHours();
 }
+// ตารางกะใส่รหัสสาขา 4 หลัก = วันนี้ทำงานต่างสาขา (เข้า 08:00)
+let dayBranch = null;
+function applyDayBranch() {
+  dayBranch = null;
+  const info = shiftInfo(todayCode); if (!info || !info.branch || DEMO) return;
+  const own = String(profile.branchId || ""), tb = branches.find((b) => String(b.id) === info.branch);
+  if (info.branch === own) return;
+  if (tb) { // สาขาในทีม: เช็กอินที่สาขานั้นได้ตามปกติ
+    dayBranch = tb; $("mBranch").value = tb.id;
+    $("branchLockName").textContent = `${tb.id} · ${tb.name} (วันนี้ทำงานต่างสาขาตามตารางกะ)`;
+  } else { // สาขานอกทีม: ใช้ "นอกสถานที่" และเลือกสาขานั้นให้
+    const p = places().find((x) => x.id === info.branch);
+    setPlaceMode("off");
+    if (p) { place = p; renderPlaces(); }
+    $("mNote").value = `ทำงานต่างสาขา ${info.branch} ตามตารางกะ`;
+  }
+  updateLoc();
+}
 function setShiftBox(info) {
   const b = $("mShiftBox");
   if (!info) { b.classList.add("hidden"); return; }
   b.classList.remove("hidden");
   b.classList.toggle("off", !!info.off);
-  $("mShiftTime").textContent = info.off ? info.off : `${info.s}–${info.e}`;
+  $("mShiftTime").textContent = info.off ? info.off : info.train ? `อบรม ${info.s}` : info.branch ? `${info.branch} · ${info.s}` : `${info.s}–${info.e}`;
 }
 const curBranch = () => branches.find((b) => b.id === $("mBranch").value);
 
@@ -839,7 +858,7 @@ function dayState(d) {
   const rs = monthRecs.filter((r) => r.day === d).sort((a, b) => a.t - b.t);
   const fin = rs.find((r) => r.type === "in"), lout = [...rs].reverse().find((r) => r.type === "out");
   const lines = [];
-  if (info) lines.push(info.off ? info.off : `กะ ${info.h} (${info.s}–${info.e})`);
+  if (info) lines.push(shiftLabel(code));
   if (fin) lines.push(`เข้างาน ${fmtTime(fin.t).slice(0, 5)}${lout ? ` · ออกงาน ${fmtTime(lout.t).slice(0, 5)}${lout.autoOut ? " (ระบบปิดให้)" : ""} · ทำงาน ${fmtDur(lout.t - fin.t)}` : ""}`);
   if (rs.some((r) => r.offsite)) lines.push("นอกสถานที่: " + rs.filter((r) => r.offsite && r.note).map((r) => r.note).join(" / "));
   let cls = "c-next", title = info ? "กะที่จะถึง" : "ไม่มีกะ", late = 0;
@@ -853,7 +872,7 @@ function dayState(d) {
     else if (d === today) { title = "วันนี้ · ยังไม่เข้างาน"; }
   }
   if (overrideDays.has(d) && !pendingDays[d]) { if (cls === "c-next" || cls === "c-off" || cls === "c-leave") cls = "c-swap"; title += " · สลับกะ (อนุมัติแล้ว)"; }
-  return { cls, title, lines, fin, late, code: info ? (info.off ? (code.length <= 2 ? code : info.off.slice(0, 3)) : String(info.h)) : "" };
+  return { cls, title, lines, fin, late, code: info ? (info.off ? (code.length <= 2 ? code : info.off.slice(0, 3)) : displayCode(code)) : "" };
 }
 function renderCal() {
   const day = bkkDay(), [y, m] = day.split("-").map(Number), last = new Date(Date.UTC(y, m, 0)).getUTCDate();

@@ -213,3 +213,6 @@ th{background:#f4f7fe;color:var(--brand-2)}
 .ro-legend span{display:flex;align-items:center;gap:6px}
 .ro-legend i{display:inline-block;width:14px;height:14px;border-radius:3px;border:1px solid #c9d3e8}
 .ro-legend i.r-edit{border:2px dashed #1E5BD8}.ro-legend i.r-pend{background:#fff6dc}
+
+.r-train{background:#e7f1fb;color:#0B2E7A}.r-branch{background:#e5f4e4;color:#15803d;font-weight:700}
+.ro-legend i.r-train{background:#e7f1fb}.ro-legend i.r-branch{background:#e5f4e4}

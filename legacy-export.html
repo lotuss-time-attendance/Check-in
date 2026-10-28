@@ -30,7 +30,7 @@
 </main>
 <script type="module">
 import { TENANTS } from "./tenants.js";
-import { shiftInfo, normCode, mergeDays, esc, bkkDay } from "./common.js";
+import { shiftInfo, normCode, mergeDays, esc, bkkDay, displayCode } from "./common.js";
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { getFirestore, collection, getDocs, query, where } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
@@ -80,7 +80,7 @@ $("go").onclick = async () => {
 };
 
 const OFFMAP = { "วันหยุด": "H", "พักร้อน": "V", "อบรม": "T" };
-function code(c) { const n = normCode(c), i = shiftInfo(n); if (!i) return n; return i.off ? (OFFMAP[i.off] || "OL") : String(i.h); }
+function code(c) { const n = normCode(c), i = shiftInfo(n); if (!i) return n; return i.off ? (OFFMAP[i.off] || "OL") : displayCode(n); }
 const key = (u) => u.empId ? String(u.empId).trim() : (u.phoneKey ? "T" + u.phoneKey : "");
 
 async function xlsx() {

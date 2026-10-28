@@ -6,7 +6,7 @@ const MULTI_ZONE = CFG.MULTI_ZONE === true; // false = ใช้คนเดี�
 import { initializeApp, deleteApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, createUserWithEmailAndPassword, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, collection, query, where, orderBy, limit, startAfter, writeBatch, Timestamp, serverTimestamp, deleteField } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
- 
+
 const SEED_BRANCHES = `5175, Bangkadi, , , 200
 5052, Pathumthani, , , 200
 5184, North Ratchapruek, , , 200
@@ -21,11 +21,11 @@ const SEED_BRANCHES = `5175, Bangkadi, , , 200
 6401, Bangkok - Phong Phet (BKK1), , , 200
 5056, Baan Fah, , , 200
 5162, Bang Kruay Sai Noi, , , 200`;
- 
+
 const SCREENS = ["scLoading", "scLogin", "scDenied", "scPanel"];
 const screen = (id) => { SCREENS.forEach((s) => $(s).classList.toggle("hidden", s !== id)); $("btnLogout").classList.toggle("hidden", id === "scLogin" || id === "scLoading"); };
 const msg = (id, t, k = "err") => { $(id).textContent = t || ""; $(id).className = "msg " + k; };
- 
+
 const STAFF_DOMAIN = ""; // ใส่ "lotuss.com" ถ้าต้องการบังคับโดเมนอีเมลพนักงาน ("" = ใช้อีเมลอะไรก็ได้)
 let branches = [], allBranches = [], users = [], reportRows = [], zones = [], reportLoaded = false;
 let me = { uid: "", role: "", zoneId: "", owner: false };
@@ -37,7 +37,7 @@ const ROLE_LABEL = { rm: "RM / RL", admin: "RM / RL", am: "AM", staff: "พน�
 const monthsBetween = (a, b) => { const out = []; let [y, m] = a.split("-").map(Number); const [y2, m2] = b.split("-").map(Number);
   while (y < y2 || (y === y2 && m <= m2)) { out.push(`${y}-${String(m).padStart(2, "0")}`); m++; if (m > 12) { m = 1; y++; } } return out; };
 const nextMonth = (ym) => { let [y, m] = ym.split("-").map(Number); m++; if (m > 12) { m = 1; y++; } return `${y}-${String(m).padStart(2, "0")}`; };
- 
+
 /* ---------- auth ---------- */
 onAuthStateChanged(auth, async (user) => {
   if (!user) return screen("scLogin");
@@ -87,7 +87,7 @@ $("btnLogin").onclick = async () => {
   finally { busy($("btnLogin"), false); }
 };
 $("btnLogout").onclick = () => signOut(auth);
- 
+
 /* ---------- tabs ---------- */
 $("tabs").addEventListener("click", (e) => {
   const b = e.target.closest("button"); if (!b) return;
@@ -100,7 +100,7 @@ $("tabs").addEventListener("click", (e) => {
   if (b.dataset.t === "roster" && roster.month !== $("roMonth").value) runRoster();
   if (b.dataset.t === "zones") loadZones();
 });
- 
+
 /* ---------- photo modal ---------- */
 document.addEventListener("click", async (e) => {
   const img = e.target.closest("img.thumb");
@@ -119,7 +119,7 @@ document.addEventListener("click", async (e) => {
 });
 $("btnPhotoClose").onclick = () => $("photoModal").classList.add("hidden");
 $("photoModal").onclick = (e) => { if (e.target.id === "photoModal") $("photoModal").classList.add("hidden"); };
- 
+
 /* ================= สาขา ================= */
 async function loadBranches() {
   allBranches = (await getDocs(collection(db, "branches"))).docs.map((d) => ({ id: d.id, ...d.data() }))
@@ -214,7 +214,7 @@ $("btnBBulk").onclick = async () => {
   try { await batch.commit(); msg("bBulkMsg", `นำเข้า ${n} สาขา` + (bad.length ? ` · ข้าม ${bad.length} บรรทัดที่ข้อมูลไม่ครบ` : ""), "ok"); loadBranches(); }
   catch (e) { msg("bBulkMsg", errText(e)); }
 };
- 
+
 /* ================= พนักงาน ================= */
 let editingUid = null;
 async function loadUsers() {
@@ -248,7 +248,7 @@ function devCell(u) {
 }
 function genPw() { const c = "abcdefghjkmnpqrstuvwxyz23456789"; return Array.from({ length: 8 }, () => c[Math.floor(Math.random() * c.length)]).join(""); }
 $("btnUGen").onclick = () => { $("uPw").value = genPw(); };
- 
+
 async function createAuthUser(email, pw) {
   const sec = initializeApp(firebaseConfig, "sec-" + Date.now() + Math.random());
   const sa = getAuth(sec);
@@ -365,7 +365,7 @@ $("tUsers").addEventListener("click", async (e) => {
     }
   } catch (err) { alert(errText(err)); }
 });
- 
+
 /* ================= คำขอเปลี่ยนเครื่อง ================= */
 async function loadDevices() {
   try {
@@ -389,7 +389,7 @@ async function loadDevices() {
   } catch (e) { $("tDev").innerHTML = `<tr><td class="msg err">${esc(errText(e))}</td></tr>`; }
 }
 $("btnDevReload").onclick = loadDevices;
- 
+
 /* ================= รายงาน ================= */
 const dayStart = (s) => new Date(s + "T00:00:00+07:00");
 async function runReport() {
@@ -480,7 +480,7 @@ $("btnReport").onclick = runReport;
 $("rSearch").addEventListener("input", renderReport);
 $("rChips").addEventListener("click", (e) => { const b = e.target.closest("button"); if (!b) return; sumFilter = b.dataset.f; renderReport(); });
 $("rZone").addEventListener("change", () => { if (todayRows.length) renderToday(); });
- 
+
 function downloadCsv(name, header, rows) {
   const q = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
   const csv = "﻿" + [header, ...rows].map((r) => r.map(q).join(",")).join("\r\n");
@@ -499,7 +499,7 @@ $("btnCsvRaw").onclick = () => {
     ["วันที่", "เวลา", "ชื่อ", "รหัสพนักงาน", "ประเภท", "รหัสสาขา", "สาขา", "ระยะจากสาขา(ม.)", "ความแม่นยำ GPS(ม.)", "ท่า", "นอกสถานที่", "หมายเหตุ", "lat", "lng"],
     filtered(true).slice().reverse().map((r) => [r.day, fmtTime(r.t), r.name, r.empId, r.type === "in" ? "เข้างาน" : "ออกงาน", r.branchId, r.branchName, r.distance, r.accuracy, r.gesture, r.offsite ? "ใช่" : "", r.note || "", r.lat, r.lng]));
 };
- 
+
 /* ================= ลบรูปเก่า ================= */
 $("btnPurge").onclick = async () => {
   const days = parseInt($("pDays").value, 10);
@@ -554,7 +554,7 @@ $("btnPurge").onclick = async () => {
   } catch (e) { msg("pMsg", errText(e)); }
   finally { busy($("btnPurge"), false); }
 };
- 
+
 /* ================= ตารางกะ: อัปโหลด ================= */
 let parsedShift = null;
 async function loadXLSX() {
@@ -569,7 +569,7 @@ async function loadXLSX() {
 }
 const serialToDay = (n) => new Date(Math.round((n - 25569) * 86400000)).toISOString().slice(0, 10);
 const cleanName = (s) => String(s ?? "").replace(/^\s*(คุณ|นางสาว|นาย|นาง|น\.ส\.)\s*/, "").replace(/\s+/g, " ").trim();
- 
+
 function parseShiftRows(rows) {
   const h = rows.findIndex((r) => r && String(r[0] ?? "").trim().toLowerCase() === "store");
   if (h < 1) throw new Error('ไม่พบหัวตาราง "Store" ในคอลัมน์ A');
@@ -591,7 +591,7 @@ function parseShiftRows(rows) {
   const months = [...new Set(cols.map((c) => c[1].slice(0, 7)))];
   return { rows: out, month: months.sort((a, b) => cols.filter((c) => c[1].startsWith(b)).length - cols.filter((c) => c[1].startsWith(a)).length)[0] };
 }
- 
+
 $("sFile").onchange = async (e) => {
   const f = e.target.files[0]; if (!f) return;
   parsedShift = null; $("btnSSave").classList.add("hidden"); $("tShiftPrev").innerHTML = "";
@@ -637,7 +637,7 @@ $("btnSSave").onclick = async () => {
   } catch (err) { msg("sMsg", errText(err)); }
   finally { busy($("btnSSave"), false); }
 };
- 
+
 /* ================= แบบฟอร์มข้อมูลทีม (สำหรับ AM) ================= */
 const empKey = (id) => "id" + String(id ?? "").replace(/\.0+$/, "").trim();
 const cellStr = (v) => (v == null ? "" : String(v).replace(/\.0+$/, "").trim());
@@ -783,7 +783,7 @@ function parseFormShiftFix(rows) {
   return rows.map((r) => { const u = users.find((x) => cellStr(x.empId) === r.empId); if (!u) return r;
     return { ...r, branchId: u.branchId || r.branchId, store: u.branchId ? `${u.branchId} ${bName(u.branchId)}` : r.store, zoneId: u.zoneId || r.zoneId, position: u.position || r.position, name: r.name || u.name }; });
 }
- 
+
 /* ================= ตารางกะ: มาสาย / ขาด ================= */
 let att = { sums: [], days: [] };
 // โหลดตารางกะ + รายการที่แก้/สลับ ของเดือน แล้วรวมกัน
@@ -910,7 +910,7 @@ $("btnAtt").onclick = runAtt;
 ["aBranch", "aShow", "aZone", "aAcct"].forEach((i) => $(i).addEventListener("change", renderAtt));
 $("aMonth").addEventListener("change", runAtt);
 $("aSearch").addEventListener("input", renderAtt);
- 
+
 /* ---------- แก้กะรายวัน (หัวหน้า) ---------- */
 async function setOverride(key, phoneKey, zoneId, day, code, by) {
   await setDoc(doc(db, "shiftOverrides", key), { month: key.slice(0, 7), phoneKey, zoneId: zoneId || "", days: { [day]: code }, log: { [day]: { by, at: new Date().toISOString() } } }, { merge: true });
@@ -918,14 +918,14 @@ async function setOverride(key, phoneKey, zoneId, day, code, by) {
 document.addEventListener("click", async (e) => {
   const b = e.target.closest("button[data-edit]"); if (!b) return;
   const [key, day, pk, z] = b.dataset.edit.split("|");
-  const code = prompt(`แก้กะวันที่ ${day}\nใส่ชั่วโมงเข้างาน (เช่น 8, 9, 10, 13) หรือ H=หยุด, V=พักร้อน, T=อบรม, ลากิจ, ลาป่วย`);
+  const code = prompt(`แก้กะวันที่ ${day}\nใส่ชั่วโมงเข้างาน (เช่น 8, 8.30, 9, 12.30) · T/MT=อบรม (เข้า 08:00) · รหัสสาขา 4 หลัก=ต่างสาขา (เข้า 08:00) · H=หยุด, V=พักร้อน, OL, ลากิจ, ลาป่วย`);
   if (code === null) return;
   const c = normCode(code);
   if (!shiftInfo(c)) return alert("รหัสไม่ถูกต้อง");
   try { await setOverride(key, pk, z, day, c, me.name || "หัวหน้า"); runAtt(); if (!$("t-today").classList.contains("hidden")) runToday(); }
   catch (err) { alert(errText(err)); }
 });
- 
+
 /* ---------- คำขอสลับวันจากพนักงาน ---------- */
 let rqRows = [];
 async function loadShiftRequests() {
@@ -954,7 +954,7 @@ $("tShiftReq").addEventListener("click", async (e) => {
     loadShiftRequests(); if (ok) runAtt();
   } catch (err) { alert(errText(err)); }
 });
- 
+
 /* ================= วันนี้ ================= */
 let todayRows = [], todayFilter = "all";
 async function runToday() {
@@ -985,7 +985,7 @@ function renderToday() {
 }
 $("tdChips").addEventListener("click", (e) => { const b = e.target.closest("button"); if (!b) return; todayFilter = b.dataset.f; renderToday(); });
 $("btnTdReload").onclick = runToday;
- 
+
 $("btnAttCsvSum").onclick = () => {
   const { sums } = attFiltered(true);
   downloadCsv(`${bkkDay()}_สรุปมาสายขาดงาน_${$("aMonth").value}.csv`,
@@ -998,7 +998,7 @@ $("btnAttCsvDay").onclick = () => {
     ["วันที่", "สาขา", "ชื่อ", "ชื่อเล่น", "รหัสกะ", "เวลากะ", "เข้างาน", "ออกงาน", "สถานะ"],
     days.slice().reverse().map((r) => [r.day, r.store, r.name, r.nickname, displayCode(r.code), r.sched, r.in ? fmtTime(r.in) : "", r.out ? fmtTime(r.out) : "", r.status]));
 };
- 
+
 /* ================= ส่งออก Excel / Google Sheet ================= */
 // รวมข้อมูลที่โหลดไว้ในหน้า (รายงานเข้า-ออก + มาสาย/ขาด) เป็นตารางหลายแท็บ
 function exportTables() {
@@ -1028,7 +1028,7 @@ async function ensureExportData() {
 }
 const exportTitle = () => `${bkkDay()}_${document.title.replace(/ Admin$/, "")}_รายงาน ${$("rFrom").value} ถึง ${$("rTo").value}`;
 const exportMsg = (b, t, k) => { const m = b.closest(".card").querySelector(".msg"); if (m) { m.textContent = t; m.className = "msg " + (k || "ok"); } };
- 
+
 document.querySelectorAll(".js-xlsx").forEach((b) => (b.onclick = async () => {
   busy(b, true, "กำลังสร้างไฟล์...");
   try {
@@ -1043,7 +1043,7 @@ document.querySelectorAll(".js-xlsx").forEach((b) => (b.onclick = async () => {
   } catch (e) { exportMsg(b, errText(e), "err"); }
   finally { busy(b, false); }
 }));
- 
+
 // ส่งเข้า Google Sheet: ผู้กดเลือกบัญชี Google ของตัวเอง → ระบบสร้างชีตใน Drive ของบัญชีนั้น
 // ใช้ Google Identity Services (ไม่ผ่านระบบล็อกอินของ Firebase) สิทธิ์ drive.file = เข้าถึงเฉพาะไฟล์ที่ระบบสร้างเท่านั้น
 let gisReady = null;
@@ -1101,7 +1101,7 @@ document.querySelectorAll(".js-gsheet").forEach((b) => (b.onclick = async () => 
   } catch (e) { exportMsg(b, errText(e), "err"); }
   finally { busy(b, false); }
 }));
- 
+
 $("btnResetAll").onclick = async () => {
   const list = users.filter((u) => (u.role || "staff") === "staff");
   if (!confirm(`รีเซ็ตเครื่องของพนักงาน ${list.length} คน?`)) return;
@@ -1118,7 +1118,7 @@ $("btnResetAll").onclick = async () => {
   } catch (e) { msg("raMsg", errText(e)); }
   finally { busy($("btnResetAll"), false); }
 };
- 
+
 /* ---------- บัญชี RM ดูอย่างเดียว ---------- */
 $("btnViewer").onclick = async () => {
   const email = $("vEmail").value.trim().toLowerCase(), name = $("vName").value.trim() || "RM";
@@ -1135,7 +1135,7 @@ $("btnViewer").onclick = async () => {
   } catch (e) { msg("vMsg", errText(e)); }
   finally { busy($("btnViewer"), false); }
 };
- 
+
 /* ================= เขต (RM) ================= */
 async function loadZones() {
   try { zones = (await getDocs(collection(db, "zones"))).docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => a.id.localeCompare(b.id)); }
@@ -1190,7 +1190,7 @@ $("btnBackfill").onclick = async () => {
   } catch (e) { msg("bfMsg", errText(e)); }
   finally { busy($("btnBackfill"), false); }
 };
- 
+
 /* ================= ตารางกะ (ภาพรวม แบบไฟล์ Excel) ================= */
 // ข้อมูลล่าสุด: ตารางที่อัปโหลด + กะที่ AM แก้ / พนักงานขอสลับที่อนุมัติแล้ว (กรอบน้ำเงิน) + คำขอที่รออนุมัติ (สีเหลือง)
 let roster = { month: "", rows: [], pend: new Map() };
@@ -1213,6 +1213,8 @@ function rosterCls(code) {
   const i = shiftInfo(code);
   if (!normCode(code)) return "r-none";
   if (!i) return "r-unk";
+  if (i.train) return "r-train";
+  if (i.branch) return "r-branch";
   if (i.off) return /วันหยุด/.test(i.off) ? "r-off" : "r-leave";
   return "r-work";
 }
@@ -1244,4 +1246,3 @@ $("btnRoster").onclick = runRoster;
 ["roBranch", "roAcct"].forEach((i) => $(i).addEventListener("change", renderRoster));
 $("roSearch").addEventListener("input", renderRoster);
 $("roMonth").addEventListener("change", runRoster);
- 

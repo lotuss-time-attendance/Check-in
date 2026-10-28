@@ -116,45 +116,71 @@ export function busy(btn, on, label) {
 }
 
 /* ---------- ตารางกะ ----------
-   ใช้ "ชั่วโมงเข้างาน" เป็นรหัสกะ เช่น 8 = 08:00–17:00, 9 = 09:00–18:00 (ทำงาน 9 ชม. รวมพัก 1 ชม.)
-   รหัสตัวอักษรเดิมในไฟล์ Excel แปลงเป็นชั่วโมงให้อัตโนมัติ (เวลา .30 ปัดเป็น .00 ตามเวลาเข้างานจริง) */
+   รหัสกะ:
+   · ตัวเลข = ชั่วโมงเข้างาน เช่น 8 = 08:00–17:00, 9 = 09:00–18:00 (ทำงาน 9 ชม. รวมพัก 1 ชม.)
+   · ทศนิยม = ชั่วโมง.นาที เช่น 8.3 = 08:30, 12.3 = 12:30 (ทศนิยม 1 หลัก = สิบนาที)
+   · T / MT = วันอบรม (training) เข้า 08:00 · นับเป็นวันทำงาน
+   · เลข 4 หลัก = รหัสสาขา เช่น 5175 = ไปทำงานต่างสาขา เข้า 08:00
+   · รหัสตัวอักษรเดิมในไฟล์ Excel แปลงเป็นชั่วโมงให้อัตโนมัติ */
 export const LATE_GRACE_MIN = 20;   // อนุโลมมาสาย (นาที)
 export const SHIFT_HOURS = 9;       // ความยาวกะ (ชม.)
 export const LETTER_TO_HOUR = { A: 8, B: 4, C: 5, D: 5, E: 7, F: 8, G: 9, I: 10, J: 11, K: 12, W: 12, L: 13, M: 21, N: 15, O1: 8 };
-export const OFF_CODES = { H: "วันหยุด", V: "พักร้อน", OL: "ลาอื่นๆ", T: "อบรม", MT: "อบรม", "ลากิจ": "ลากิจ", "ลาป่วย": "ลาป่วย", "ลาคลอด": "ลาคลอด" };
-export const SHIFT_CHOICES = ["5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "21", "H", "V", "OL", "T", "ลากิจ", "ลาป่วย"];
+export const OFF_CODES = { H: "วันหยุด", V: "พักร้อน", OL: "ลาอื่นๆ", "ลากิจ": "ลากิจ", "ลาป่วย": "ลาป่วย", "ลาคลอด": "ลาคลอด" };
+export const TRAIN_CODES = { T: "อบรม", MT: "อบรม" };
+export const TRAIN_HOUR = 8, OTHER_BRANCH_HOUR = 8;
+export const SHIFT_CHOICES = ["5", "6", "7", "8", "8.30", "9", "9.30", "10", "11", "12", "12.30", "13", "14", "15", "21", "T", "H", "V", "OL", "ลากิจ", "ลาป่วย"];
 export function normCode(v) {
-  const s = String(v ?? "").trim();
+  let s = String(v ?? "").trim();
+  // ชั่วโมง.นาที (8.3 / 8.30 / 8:30 / ค่าทศนิยมจาก Excel) → "8.30"
+  const m = s.match(/^(\d{1,2})[.:](\d{1,})$/);
+  if (m && +m[1] <= 23) {
+    let mm = m[2].length === 1 ? +m[2] * 10 : Math.round(+("0." + m[2]) * 100);
+    if (mm >= 60) mm = 0;
+    return mm ? `${+m[1]}.${String(mm).padStart(2, "0")}` : String(+m[1]);
+  }
   return /^[a-z0-9]+$/i.test(s) ? s.toUpperCase() : s;
 }
-const hh = (h) => String(h % 24).padStart(2, "0") + ":00";
-export function shiftHour(code) {
+const hhmm = (mins) => { const t = ((mins % 1440) + 1440) % 1440; return String(Math.floor(t / 60)).padStart(2, "0") + ":" + String(t % 60).padStart(2, "0"); };
+// เวลาเริ่มกะเป็นนาที (null = ไม่ใช่กะทำงาน)
+export function shiftStartMin(code) {
   const c = normCode(code);
-  if (/^\d{1,2}$/.test(c) && +c <= 23) return +c;
-  if (c in LETTER_TO_HOUR) return LETTER_TO_HOUR[c];
+  if (/^\d{1,2}$/.test(c) && +c <= 23) return +c * 60;
+  const m = c.match(/^(\d{1,2})\.(\d{2})$/); if (m) return +m[1] * 60 + +m[2];
+  if (c in LETTER_TO_HOUR) return LETTER_TO_HOUR[c] * 60;
+  if (c in TRAIN_CODES) return TRAIN_HOUR * 60;
+  if (/^\d{4}$/.test(c)) return OTHER_BRANCH_HOUR * 60;
   return null;
 }
+export function shiftHour(code) { const m = shiftStartMin(code); return m === null ? null : Math.floor(m / 60); }
 export function shiftInfo(code) {
   const c = normCode(code);
   if (!c) return null;
   if (c in OFF_CODES) return { off: OFF_CODES[c] };
-  const h = shiftHour(c);
-  if (h === null) return null;
-  const end = h + SHIFT_HOURS;
-  return { h, s: hh(h), e: end === 24 ? "24:00" : hh(end), note: c === "O1" ? "เปิดเซฟ" : "" };
+  const sm = shiftStartMin(c);
+  if (sm === null) return null;
+  const em = sm + SHIFT_HOURS * 60;
+  const info = { h: Math.floor(sm / 60), m: sm % 60, s: hhmm(sm), e: em === 1440 ? "24:00" : hhmm(em), note: c === "O1" ? "เปิดเซฟ" : "" };
+  if (c in TRAIN_CODES) { info.train = true; info.note = "อบรม"; }
+  if (/^\d{4}$/.test(c)) { info.branch = c; info.note = "ต่างสาขา " + c; }
+  return info;
 }
-// รหัสสำหรับแสดงผล: ตัวอักษรเดิม → ตัวเลขชั่วโมง
+// รหัสสำหรับแสดงผล: ตัวอักษรเดิม → ตัวเลขชั่วโมง · 8.30 · T · รหัสสาขา
 export function displayCode(code) {
   const c = normCode(code), i = shiftInfo(c);
   if (!c) return "-";
   if (!i) return c;
-  return i.off ? i.off : String(i.h);
+  if (i.off) return i.off;
+  if (i.train || i.branch) return c;
+  return i.m ? `${i.h}.${String(i.m).padStart(2, "0")}` : String(i.h);
 }
 export function shiftLabel(code) {
   const c = normCode(code), i = shiftInfo(c);
   if (!c) return "ไม่มีกะ";
   if (!i) return `รหัส ${c}`;
-  return i.off ? i.off : `กะ ${i.h} (${i.s}–${i.e})${i.note ? " · " + i.note : ""}`;
+  if (i.off) return i.off;
+  if (i.train) return `อบรม (${i.s}–${i.e})`;
+  if (i.branch) return `ต่างสาขา ${i.branch} (${i.s}–${i.e})`;
+  return `กะ ${displayCode(c)} (${i.s}–${i.e})${i.note ? " · " + i.note : ""}`;
 }
 export function phoneKey(p) { const d = String(p ?? "").replace(/\D/g, ""); return d.length >= 9 ? d.slice(-9) : ""; }
 export function bkkTime(day, hhmm) {
