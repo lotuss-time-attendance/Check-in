@@ -918,7 +918,7 @@ async function setOverride(key, phoneKey, zoneId, day, code, by) {
 document.addEventListener("click", async (e) => {
   const b = e.target.closest("button[data-edit]"); if (!b) return;
   const [key, day, pk, z] = b.dataset.edit.split("|");
-  const code = prompt(`แก้กะวันที่ ${day}\nใส่ชั่วโมงเข้างาน (เช่น 8, 8.30, 9, 12.30) · T/MT=อบรม (เข้า 08:00) · รหัสสาขา 4 หลัก=ต่างสาขา (เข้า 08:00) · H=หยุด, V=พักร้อน, OL, ลากิจ, ลาป่วย`);
+  const code = prompt(`แก้กะวันที่ ${day}\nใส่ชั่วโมงเข้างาน (เช่น 8, 8.30, 9, 12.30) · T/MT=อบรม · VISIT=ออกตรวจสาขา · 02/On duty · รหัสสาขา 4 หลัก=ต่างสาขา (ทั้งหมดเข้า 08:00) · H=หยุด, V=พักร้อน, OL/ลก=ลากิจ, ลาป่วย`);
   if (code === null) return;
   const c = normCode(code);
   if (!shiftInfo(c)) return alert("รหัสไม่ถูกต้อง");
@@ -1213,7 +1213,7 @@ function rosterCls(code) {
   const i = shiftInfo(code);
   if (!normCode(code)) return "r-none";
   if (!i) return "r-unk";
-  if (i.train) return "r-train";
+  if (i.train || i.special) return "r-train";
   if (i.branch) return "r-branch";
   if (i.off) return /วันหยุด/.test(i.off) ? "r-off" : "r-leave";
   return "r-work";

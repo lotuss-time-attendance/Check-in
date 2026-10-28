@@ -3,6 +3,7 @@ import { auth, db, $, haversine, fmtDist, getDeviceId, isMobile, isInAppBrowser,
 import { TENANT_QS, TENANT_REGION, TENANT_ID } from "./firebase-config.js";
 import { TENANTS } from "./tenants.js";
 import { STORES } from "./stores.js";
+import { LOOKS, applyLook } from "./filters.js";
 import { findTeam, goTeam, resetAllTeams, teamKnown } from "./teamfinder.js";
 document.querySelectorAll('a[href="admin.html"]').forEach((a) => (a.href = "admin.html" + TENANT_QS));
 import { signInWithEmailAndPassword, signOut, onAuthStateChanged, updatePassword, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
@@ -267,7 +268,9 @@ async function loadShift() {
 let dayBranch = null;
 function applyDayBranch() {
   dayBranch = null;
-  const info = shiftInfo(todayCode); if (!info || !info.branch || DEMO) return;
+  const info = shiftInfo(todayCode); if (!info || DEMO) return;
+  if (info.visit) { setPlaceMode("off"); $("mNote").value = "ออกตรวจสาขา (Visit) ตามตารางกะ"; updateLoc(); return; }
+  if (!info.branch) return;
   const own = String(profile.branchId || ""), tb = branches.find((b) => String(b.id) === info.branch);
   if (info.branch === own) return;
   if (tb) { // สาขาในทีม: เช็กอินที่สาขานั้นได้ตามปกติ
@@ -286,7 +289,7 @@ function setShiftBox(info) {
   if (!info) { b.classList.add("hidden"); return; }
   b.classList.remove("hidden");
   b.classList.toggle("off", !!info.off);
-  $("mShiftTime").textContent = info.off ? info.off : info.train ? `อบรม ${info.s}` : info.branch ? `${info.branch} · ${info.s}` : `${info.s}–${info.e}`;
+  $("mShiftTime").textContent = info.off ? info.off : info.train ? `อบรม ${info.s}` : info.branch ? `${info.branch} · ${info.s}` : info.special ? `${displayCode(todayCode)} · ${info.s}` : `${info.s}–${info.e}`;
 }
 const curBranch = () => branches.find((b) => b.id === $("mBranch").value);
 
@@ -483,147 +486,19 @@ function resetPhoto() {
 $("btnCam").onclick = openCam;
 $("btnRetake").onclick = () => { resetPhoto(); openCam(); };
 $("btnFilter").onclick = () => {
-  beauty = (beauty + 1) % PRESETS.length;
-  try { localStorage.setItem("amci_beauty", String(beauty)); } catch (e) {}
+  beauty = (beauty + 1) % LOOKS.length;
+  try { localStorage.setItem("amci_look", String(beauty)); } catch (e) {}
   showBeauty();
 };
-/* ---------- ฟิลเตอร์หน้าสวย (ทำงานบนพิกเซล ใช้ได้ทั้ง iPhone/Android) ----------
-   1) ผิวสว่าง-ขาวอมชมพูขึ้น  2) ผิวเนียน (เบลอเฉพาะผิว ไม่เบลอขอบตา/คิ้ว/ปาก)  3) เติมสีปากระเรื่อเล็กน้อย */
-// ผิวดี (แนว Good Skin): ผิวเนียน ลดความเหลือง/หมอง ให้ผิวสว่างใสอมชมพูแบบธรรมชาติ แก้ม-ปากระเรื่อเล็กน้อย พื้นหลังไม่เปลี่ยน
-// target = ความสว่างผิวหน้าที่ต้องการ (ปรับแสงอัตโนมัติ ถ้าถ่ายในที่มืด/ย้อนแสง หน้าจะถูกยกให้สว่างถึงระดับนี้)
-// ขาวใส (แนว ขาวใสเนียน): หน้าสว่างใส ผิวขาวเนียน
-const BEAUTY_WHITE = { target: 166, sat: 1.04, base: 0, sr: 0.04, sg: 0.06, sb: 0.08, smooth: 0.38, lip: 0.25, lipC: [205, 95, 115], glow: 0, blush: 0.05, pink: 0, label: "ขาวใส" };
-// ผิวดี (แนว Good Skin): ผิวใสอมชมพูแบบธรรมชาติ
-const BEAUTY = { target: 156, sat: 1.03, base: 0, sr: 0.04, sg: 0.07, sb: 0.11, smooth: 0.32, lip: 0.25, lipC: [205, 95, 115], glow: 0, blush: 0.06, pink: 0, label: "ผิวดี" };
-const PRESETS = [null, BEAUTY_WHITE, BEAUTY];
-const BEAUTY_NAMES = ["ปิด", ...PRESETS.slice(1).map((p) => p.label)];
-function setVidClass(v) { [1, 2].forEach((k) => v.classList.toggle("bz" + k, beauty === k)); }
+/* ---------- ฟิลเตอร์โทนสีแบบ IG (filters.js) — พรีวิวกล้องใช้ CSS ใกล้เคียงกัน รูปที่บันทึกใช้ applyLook ---------- */
+const LOOK_NAMES = ["ปิด", ...LOOKS.slice(1).map((p) => p.label)];
+function setVidClass(v) { v.style.filter = (LOOKS[beauty] && LOOKS[beauty].css) || ""; }
 function showBeauty() {
-  $("btnFilter").textContent = `✨ ฟิลเตอร์หน้าสวย: ${BEAUTY_NAMES[beauty]} (กดเพื่อเปลี่ยน)`;
+  $("btnFilter").textContent = `✨ ฟิลเตอร์: ${LOOK_NAMES[beauty]} (กดเพื่อเปลี่ยน)`;
   setVidClass($("video"));
 }
-try { const v = parseInt(localStorage.getItem("amci_beauty"), 10); if (v >= 0 && v < PRESETS.length) beauty = v; } catch (e) {}
+try { const v = parseInt(localStorage.getItem("amci_look"), 10); if (v >= 0 && v < LOOKS.length) beauty = v; } catch (e) {}
 setTimeout(showBeauty, 0);
-function boxBlur(src, W, H, r) {
-  const tmp = new Float32Array(W * H * 3), out = new Float32Array(W * H * 3), n = 2 * r + 1;
-  for (let y = 0; y < H; y++) for (let c = 0; c < 3; c++) {
-    let acc = 0;
-    for (let k = -r; k <= r; k++) acc += src[(y * W + Math.min(W - 1, Math.max(0, k))) * 4 + c];
-    for (let x = 0; x < W; x++) {
-      tmp[(y * W + x) * 3 + c] = acc / n;
-      acc += src[(y * W + Math.min(W - 1, x + r + 1)) * 4 + c] - src[(y * W + Math.max(0, x - r)) * 4 + c];
-    }
-  }
-  for (let x = 0; x < W; x++) for (let c = 0; c < 3; c++) {
-    let acc = 0;
-    for (let k = -r; k <= r; k++) acc += tmp[(Math.min(H - 1, Math.max(0, k)) * W + x) * 3 + c];
-    for (let y = 0; y < H; y++) {
-      out[(y * W + x) * 3 + c] = acc / n;
-      acc += tmp[(Math.min(H - 1, y + r + 1) * W + x) * 3 + c] - tmp[(Math.max(0, y - r) * W + x) * 3 + c];
-    }
-  }
-  return out;
-}
-function beautify(ctx, W, H, P) {
-  try {
-    const img = ctx.getImageData(0, 0, W, H), d = img.data, N = W * H;
-    // ปรับแสงอัตโนมัติ: วัดความสว่างของผิวช่วงกลางภาพ ถ้ามืดกว่าเป้าหมาย ยกแสงทั้งภาพด้วยเส้นโค้ง (ส่วนสว่างไม่ขาวโพลน)
-    if (P.target) {
-      let ys = 0, n = 0;
-      for (let y = Math.round(H * 0.2); y < H * 0.75; y += 2) for (let x = Math.round(W * 0.25); x < W * 0.75; x += 2) {
-        const i = (y * W + x) * 4, r = d[i], g = d[i + 1], b = d[i + 2];
-        const cb = 128 - 0.1687 * r - 0.3313 * g + 0.5 * b, cr = 128 + 0.5 * r - 0.4187 * g - 0.0813 * b;
-        if (cb > 85 && cb < 128 && cr > 133 && cr < 175) { ys += 0.299 * r + 0.587 * g + 0.114 * b; n++; }
-      }
-      const fy0 = n > 50 ? ys / n : 0;
-      if (fy0 > 25 && fy0 < P.target) {
-        // เพิ่มแสงแบบ "เปิดรับแสง" (คูณ) — ส่วนมืด เช่น ผม/ตา ยังเข้มเหมือนเดิม ภาพไม่ฟุ้งเทา; ส่วนสว่างค่อย ๆ โค้งไม่ให้ขาวโพลน
-        const gain = Math.min(1.8, P.target / fy0), lut = new Uint8ClampedArray(256);
-        for (let v = 0; v < 256; v++) { const x = (v * gain) / 255; lut[v] = Math.round(255 * (x < 0.8 ? x : 0.8 + 0.2 * (1 - Math.exp(-(x - 0.8) / 0.2)))); }
-        for (let i = 0; i < d.length; i += 4) { d[i] = lut[d[i]]; d[i + 1] = lut[d[i + 1]]; d[i + 2] = lut[d[i + 2]]; }
-      }
-    }
-    const bl = boxBlur(d, W, H, Math.max(2, Math.round(W / 120)));
-    const glow = P.glow ? boxBlur(d, W, H, Math.round(W / 25)) : null;
-    // หน้ากากผิวแบบนุ่ม (0–1) แล้วเบลอหน้ากาก เพื่อไม่ให้เป็นด่าง ๆ ตรงผม/ขอบ
-    const m = new Float32Array(N * 4), CR = new Float32Array(N), LY = new Float32Array(N);
-    let sx = 0, sy = 0, sw = 0, sxx = 0, syy = 0, scr = 0, srg = 0, sly = 0;
-    for (let p = 0; p < N; p++) {
-      const i = p * 4, r = d[i], g = d[i + 1], b = d[i + 2];
-      const Y = 0.299 * r + 0.587 * g + 0.114 * b, cb = 128 - 0.1687 * r - 0.3313 * g + 0.5 * b, cr = 128 + 0.5 * r - 0.4187 * g - 0.0813 * b;
-      CR[p] = cr; LY[p] = Y;
-      const dc = ((cb - 110) / 14) ** 2 + ((cr - 150) / 13) ** 2;
-      const w = Math.exp(-dc / 2) * Math.min(1, Math.max(0, (Y - 70) / 50));
-      m[i] = w;
-      const x = p % W, y = (p / W) | 0;
-      if (x > W * 0.15 && x < W * 0.85 && y > H * 0.08 && y < H * 0.8) { const w2 = w * w; sx += x * w2; sy += y * w2; sxx += x * x * w2; syy += y * y * w2; scr += cr * w2; srg += (r - g) * w2; sly += Y * w2; sw += w2; }
-    }
-    const mb = boxBlur(m, W, H, Math.max(4, Math.round(W / 35))); // ขอบนุ่มมาก ไม่ให้หน้าดูลอยแยกจากคอ/หู
-    // ตำแหน่งใบหน้าโดยประมาณ (จุดศูนย์กลางของผิว) สำหรับลงบลัชที่แก้ม
-    const fx = sw ? sx / sw : W / 2, fy = sw ? sy / sw : H * 0.45;
-    const fsx = sw ? Math.sqrt(Math.max(1, sxx / sw - fx * fx)) : W * 0.15, fsy = sw ? Math.sqrt(Math.max(1, syy / sw - fy * fy)) : H * 0.15;
-    const skinCr = sw ? scr / sw : 148, skinRG = sw ? srg / sw : 35, skinY = sw ? sly / sw : 150, fr = fsx * 0.6;
-    // หาแนวปาก: แถวที่ "แดงกว่าผิว และเข้มกว่าผิว" มากที่สุด ในครึ่งล่างของใบหน้า (กันไม่ให้ไปลงที่จมูก)
-    const lipScore = (p) => { const i = p * 4; if (LY[p] > skinY - 10 || LY[p] < 30) return 0; return Math.max(0, (CR[p] - skinCr) + 0.4 * ((d[i] - d[i + 1]) - skinRG)); };
-    let my = -1, best = 0;
-    { const ya = Math.round(fy + fsy * 0.2), yb = Math.min(H - 3, Math.round(fy + fsy * 2.2)), xa = Math.max(0, Math.round(fx - fsx * 0.5)), xb = Math.min(W - 1, Math.round(fx + fsx * 0.5));
-      const prof = [];
-      for (let y = ya; y <= yb; y++) { let a = 0; for (let x = xa; x <= xb; x++) a += lipScore(y * W + x); prof.push(a / (xb - xa + 1)); }
-      for (let k = 2; k < prof.length - 2; k++) { const v = prof[k - 2] + prof[k - 1] + prof[k] + prof[k + 1] + prof[k + 2]; if (v > best) { best = v; my = ya + k; } } }
-    const hasLip = my > 0 && best > 5;
-    if (hasLip) my -= Math.round(fsy * 0.12); // เงาใต้ริมฝีปากมักเข้มสุด เลื่อนขึ้นมาที่กลางปาก
-    const mx = fx, mrx = fsx * 0.6, mry = fsy * 0.24; // บริเวณปาก
-    const cy = hasLip ? my - (my - fy) * 0.55 : fy + fsy * 0.4;
-    const cheeks = [[fx - fsx * 0.95, cy], [fx + fsx * 0.95, cy]];
-    // หน้ากากปาก: แดงกว่าผิวของหน้า ภายในบริเวณปาก แล้วเบลอให้ขอบนุ่ม ตัดจุดเล็ก ๆ ทิ้ง
-    let lb = null;
-    if (P.lip && hasLip) {
-      const L = new Float32Array(N * 4);
-      const y0 = Math.max(0, Math.floor(my - mry)), y1 = Math.min(H - 1, Math.ceil(my + mry));
-      for (let y = y0; y <= y1; y++) for (let x = Math.max(0, Math.floor(mx - mrx)); x <= Math.min(W - 1, Math.ceil(mx + mrx)); x++) {
-        const p = y * W + x, i = p * 4, me = ((x - mx) / mrx) ** 2 + ((y - my) / mry) ** 2;
-        if (me >= 1 || LY[p] > skinY + 5 || LY[p] < 30) continue;
-        const ls = (CR[p] - skinCr) + 0.4 * ((d[i] - d[i + 1]) - skinRG);
-        L[i] = Math.min(1, Math.max(0, (ls - 2) / 10)) * Math.min(1, (1 - me) * 3);
-      }
-      lb = boxBlur(L, W, H, Math.max(3, Math.round(W / 90)));
-    }
-    for (let p = 0; p < N; p++) {
-      const i = p * 4, j = p * 3, x = p % W, y = (p / W) | 0;
-      let r = d[i], g = d[i + 1], b = d[i + 2];
-      const sk = Math.min(1, mb[j] * 1.3);
-      // ผิวเนียน: ผสมภาพเบลอ แต่ลดลงเมื่อเป็นขอบ (ตา คิ้ว ปาก) เพื่อให้หน้ายังคมชัด
-      const diff = Math.abs(r - bl[j]) + Math.abs(g - bl[j + 1]) + Math.abs(b - bl[j + 2]);
-      const w = P.smooth * sk * Math.max(0, 1 - diff / 45);
-      r += (bl[j] - r) * w; g += (bl[j + 1] - g) * w; b += (bl[j + 2] - b) * w;
-      // ผิวสว่าง + ลดความเหลือง ให้ขาวอมชมพู (ส่วนอื่นสว่างขึ้นเล็กน้อย)
-      r += (255 - r) * (P.base + P.sr * sk); g += (255 - g) * (P.base + P.sg * sk); b += (255 - b) * (P.base + P.sb * sk);
-      if (P.sat && sk > 0) { const f = 1 + (P.sat - 1) * sk, yv = 0.299 * r + 0.587 * g + 0.114 * b; r = yv + (r - yv) * f; g = yv + (g - yv) * f; b = yv + (b - yv) * f; } // คืนความมีชีวิตชีวาให้ผิว ไม่ให้ซีดเทา
-      if (P.pink) { r += (255 - r) * P.pink * 0.6; g -= g * P.pink * 0.35; b += (230 - b) * P.pink * 0.25; }
-      // บลัชแก้ม (เฉพาะบริเวณผิว)
-      if (P.blush && sk > 0.2) {
-        let bw = 0;
-        for (const [cx, cy] of cheeks) { const dd = ((x - cx) ** 2 + ((y - cy) * 1.3) ** 2) / (fr * fr); if (dd < 1) bw = Math.max(bw, (1 - dd) ** 2); }
-        if (bw) { const t = P.blush * bw * Math.min(1, sk * 1.3); r += (240 - r) * t; g += (120 - g) * t; b += (140 - b) * t; }
-      }
-      // เติมปาก: โทนแดง-ชมพูที่แดงกว่าผิว บริเวณกลางภาพ (ใบหน้า)
-            // ปาก = แดงกว่าผิวเฉลี่ยของหน้า และอยู่ช่วงล่างของใบหน้า
-      const lv = lb ? Math.max(0, lb[j] - 0.12) / 0.88 : 0;
-      if (lv > 0) {
-        const t = P.lip * Math.min(1, lv * 1.4);
-        r += (P.lipC[0] - r) * t; g += (P.lipC[1] - g) * t * 0.6; b += (P.lipC[2] - b) * t * 0.6;
-      }
-      // โกลว์: ซ้อนแสงฟุ้งแบบ screen ให้ภาพฉ่ำ นุ่ม
-      if (glow) {
-        const gl = Math.max(0, (glow[j] + glow[j + 1] + glow[j + 2]) / 3 - 90) / 165, a = P.glow * gl;
-        const gr = glow[j], gg = glow[j + 1], gb = glow[j + 2];
-        r += (255 - (255 - r) * (255 - gr) / 255 - r) * a; g += (255 - (255 - g) * (255 - gg) / 255 - g) * a; b += (255 - (255 - b) * (255 - gb) / 255 - b) * a;
-      }
-      d[i] = r; d[i + 1] = g; d[i + 2] = b;
-    }
-    ctx.putImageData(img, 0, 0);
-  } catch (e) { /* ถ้าเครื่องไม่รองรับ ใช้ภาพปกติ */ }
-}
 $("btnShoot").onclick = () => {
   const v = $("video");
   if (!v.videoWidth) return;
@@ -633,7 +508,7 @@ $("btnShoot").onclick = () => {
   ctx.save(); ctx.translate(W, 0); ctx.scale(-1, 1);
   ctx.drawImage(v, 0, 0, W, H);
   ctx.restore();
-  if (beauty) beautify(ctx, W, H, PRESETS[beauty]);
+  if (beauty && LOOKS[beauty]) { const img = ctx.getImageData(0, 0, W, H); applyLook(img.data, W, H, LOOKS[beauty]); ctx.putImageData(img, 0, 0); }
   const b = curBranch();
   ctx.fillStyle = "rgba(0,0,0,.55)"; ctx.fillRect(0, H - 70, W, 70);
   ctx.fillStyle = "#fff"; ctx.font = "20px sans-serif";
