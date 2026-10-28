@@ -454,22 +454,44 @@ $("noteChips").addEventListener("click", (e) => {
 });
 
 /* ---------- กล้อง (เฉพาะเข้างาน) ---------- */
-async function openCam() {
+// ถ่ายด้วยแอปกล้องของมือถือ (ได้ HDR / โหมดสวย / ลด noise ของเครื่อง) — ยังบังคับท่ามือสุ่ม + ต้องเป็นรูปที่เพิ่งถ่าย
+function openCam() {
   msg("mMsg", "");
+  if (!gesture) gesture = GESTURES[Math.floor(Math.random() * GESTURES.length)];
+  $("gesture").innerHTML = `<span class="e">${gesture.emoji}</span>ทำท่า: ${esc(gesture.text)} ตอนถ่ายรูป`;
+  $("gesture").classList.remove("hidden");
+  $("camInput").value = "";
+  $("camInput").click();
+}
+let lastShot = null; // ไฟล์ล่าสุด (เปลี่ยนฟิลเตอร์หลังถ่ายได้โดยไม่ต้องถ่ายใหม่)
+$("camInput").addEventListener("change", async (e) => {
+  const f = e.target.files && e.target.files[0]; if (!f) return;
+  if (!/^image\//.test(f.type || "image/")) return msg("mMsg", "ไฟล์นี้ไม่ใช่รูปภาพ — ถ่ายใหม่อีกครั้ง");
+  if (f.lastModified && Date.now() - f.lastModified > 5 * 60000) return msg("mMsg", "ต้องเป็นรูปที่เพิ่งถ่ายตอนนี้เท่านั้น — กดถ่ายเซลฟี่ใหม่");
+  lastShot = f; await processShot(f);
+});
+async function processShot(f) {
   try {
-    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: { ideal: 720 }, height: { ideal: 960 } }, audio: false });
-    const v = $("video");
-    v.srcObject = stream;
-    setVidClass(v);
-    await v.play();
-    gesture = GESTURES[Math.floor(Math.random() * GESTURES.length)];
-    $("gesture").innerHTML = `<span class="e">${gesture.emoji}</span>ทำท่า: ${esc(gesture.text)} แล้วกดถ่ายรูป`;
-    $("gesture").classList.remove("hidden");
-    v.classList.remove("hidden"); $("camPh").classList.add("hidden"); $("shot").classList.add("hidden");
-    $("btnCam").classList.add("hidden"); $("btnShoot").classList.remove("hidden"); $("btnRetake").classList.add("hidden");
-  } catch (e) {
-    msg("mMsg", "เปิดกล้องไม่ได้ — ตรวจสอบว่าเปิดด้วย Safari/Chrome และกดอนุญาตกล้องแล้ว");
-  }
+    let bmp;
+    try { bmp = await createImageBitmap(f, { imageOrientation: "from-image" }); }
+    catch (err) { bmp = await new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.src = URL.createObjectURL(f); }); }
+    const sw = bmp.width, sh = bmp.height, W = Math.min(720, sw), H = Math.round(W * (sh / sw));
+    const c = $("canvas"), ctx = c.getContext("2d");
+    c.width = W; c.height = H;
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(bmp, 0, 0, W, H);
+    if (bmp.close) bmp.close();
+    if (beauty && LOOKS[beauty]) { const img = ctx.getImageData(0, 0, W, H); applyLook(img.data, W, H, LOOKS[beauty]); ctx.putImageData(img, 0, 0); }
+    const b = curBranch(), fs = Math.max(16, Math.round(W / 34));
+    ctx.fillStyle = "rgba(0,0,0,.55)"; ctx.fillRect(0, H - fs * 3.4, W, fs * 3.4);
+    ctx.fillStyle = "#fff"; ctx.font = `${fs}px sans-serif`;
+    ctx.fillText(`${profile.name || ""} · ${b ? b.name : ""}`, 14, H - fs * 1.9);
+    ctx.fillText(`เข้างาน · ท่า: ${gesture.text} · ${new Date().toLocaleString("th-TH", { timeZone: "Asia/Bangkok" })}`, 14, H - fs * 0.6);
+    for (const q of [0.82, 0.72, 0.62, 0.5, 0.4]) { photo = c.toDataURL("image/jpeg", q); if (photo.length <= 280000) break; } // ไม่เกินขนาดที่ฐานข้อมูลรับได้
+    $("shot").src = photo; $("shot").classList.remove("hidden"); $("camPh").classList.add("hidden");
+    $("btnCam").classList.add("hidden"); $("btnRetake").classList.remove("hidden");
+    refresh();
+  } catch (err) { msg("mMsg", "อ่านรูปไม่ได้ — กดถ่ายเซลฟี่ใหม่"); }
 }
 function stopCam() {
   if (stream) stream.getTracks().forEach((t) => t.stop());
@@ -477,18 +499,19 @@ function stopCam() {
   $("video").classList.add("hidden");
 }
 function resetPhoto() {
-  stopCam(); photo = null; gesture = null;
+  stopCam(); photo = null; gesture = null; lastShot = null;
   $("shot").classList.add("hidden"); $("shot").removeAttribute("src");
   $("camPh").classList.remove("hidden"); $("gesture").classList.add("hidden");
   $("btnCam").classList.remove("hidden"); $("btnShoot").classList.add("hidden"); $("btnRetake").classList.add("hidden");
   refresh();
 }
 $("btnCam").onclick = openCam;
-$("btnRetake").onclick = () => { resetPhoto(); openCam(); };
+$("btnRetake").onclick = () => { photo = null; $("shot").classList.add("hidden"); $("camPh").classList.remove("hidden"); refresh(); openCam(); };
 $("btnFilter").onclick = () => {
   beauty = (beauty + 1) % LOOKS.length;
   try { localStorage.setItem("amci_look", String(beauty)); } catch (e) {}
   showBeauty();
+  if (photo && lastShot) processShot(lastShot);
 };
 /* ---------- ฟิลเตอร์โทนสีแบบ IG (filters.js) — พรีวิวกล้องใช้ CSS ใกล้เคียงกัน รูปที่บันทึกใช้ applyLook ---------- */
 const LOOK_NAMES = ["ปิด", ...LOOKS.slice(1).map((p) => p.label)];
@@ -499,28 +522,6 @@ function showBeauty() {
 }
 try { const v = parseInt(localStorage.getItem("amci_look"), 10); if (v >= 0 && v < LOOKS.length) beauty = v; } catch (e) {}
 setTimeout(showBeauty, 0);
-$("btnShoot").onclick = () => {
-  const v = $("video");
-  if (!v.videoWidth) return;
-  const W = 640, H = Math.round(W * (v.videoHeight / v.videoWidth)); // ความละเอียดสูงขึ้น ภาพคมขึ้น
-  const c = $("canvas"), ctx = c.getContext("2d");
-  c.width = W; c.height = H;
-  ctx.save(); ctx.translate(W, 0); ctx.scale(-1, 1);
-  ctx.drawImage(v, 0, 0, W, H);
-  ctx.restore();
-  if (beauty && LOOKS[beauty]) { const img = ctx.getImageData(0, 0, W, H); applyLook(img.data, W, H, LOOKS[beauty]); ctx.putImageData(img, 0, 0); }
-  const b = curBranch();
-  ctx.fillStyle = "rgba(0,0,0,.55)"; ctx.fillRect(0, H - 70, W, 70);
-  ctx.fillStyle = "#fff"; ctx.font = "20px sans-serif";
-  ctx.fillText(`${profile.name || ""} · ${b ? b.name : ""}`, 14, H - 42);
-  ctx.fillText(`เข้างาน · ท่า: ${gesture.text} · ${new Date().toLocaleString("th-TH", { timeZone: "Asia/Bangkok" })}`, 14, H - 14);
-  photo = c.toDataURL("image/jpeg", 0.75);
-  if (photo.length > 280000) photo = c.toDataURL("image/jpeg", 0.55); // ไม่เกินขนาดที่ฐานข้อมูลรับได้
-  stopCam();
-  $("shot").src = photo; $("shot").classList.remove("hidden");
-  $("btnShoot").classList.add("hidden"); $("btnRetake").classList.remove("hidden");
-  refresh();
-};
 document.addEventListener("visibilitychange", () => { if (document.hidden && stream) resetPhoto(); });
 
 /* ---------- ยืนยัน ---------- */

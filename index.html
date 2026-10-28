@@ -119,12 +119,13 @@
       <div class="cam">
         <video id="video" playsinline muted autoplay class="hidden"></video>
         <img id="shot" class="hidden" alt="เซลฟี่">
-        <div id="camPh" class="ph">📷<br>กด "เปิดกล้อง" เพื่อถ่ายเซลฟี่</div>
+        <div id="camPh" class="ph">📷<br>กด "ถ่ายเซลฟี่" ระบบจะเปิดกล้องหน้าของมือถือ<br>ทำท่าตามที่บอก แล้วกดถ่าย</div>
       </div>
       <div class="row">
-        <button id="btnCam" class="btn">เปิดกล้อง</button>
+        <button id="btnCam" class="btn primary">📷 ถ่ายเซลฟี่</button>
         <button id="btnShoot" class="btn primary hidden">ถ่ายรูป</button>
         <button id="btnRetake" class="btn hidden">ถ่ายใหม่</button>
+        <input type="file" id="camInput" accept="image/*" capture="user" class="hidden">
       </div>
       <button id="btnFilter" class="link">✨ ฟิลเตอร์: นุ่ม (กดเพื่อเปลี่ยน)</button>
     </div>
