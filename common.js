@@ -125,13 +125,13 @@ export function busy(btn, on, label) {
    · รหัสตัวอักษรเดิมในไฟล์ Excel แปลงเป็นชั่วโมงให้อัตโนมัติ */
 export const LATE_GRACE_MIN = 20;   // อนุโลมมาสาย (นาที)
 export const SHIFT_HOURS = 9;       // ความยาวกะ (ชม.)
-export const LETTER_TO_HOUR = { A: 8, B: 4, C: 5, D: 5, E: 7, F: 8, G: 9, I: 10, J: 11, K: 12, W: 12, L: 13, M: 21, N: 15, O: 8, O1: 8 };
+export const LETTER_TO_HOUR = { A: 8, B: 4, C: 5, D: 5, E: 7, F: 8, G: 9, I: 10, J: 11, K: 12, W: 12, X: 13, L: 13, M: 21, N: 15, O: 8, O1: 8 };
 export const OFF_CODES = { H: "วันหยุด", OFF: "วันหยุด", V: "พักร้อน", OL: "ลากิจ", "ลก": "ลากิจ", "ลากิจ": "ลากิจ", "ลาป่วย": "ลาป่วย", "ลาคลอด": "ลาคลอด" };
 export const TRAIN_CODES = { T: "อบรม", MT: "อบรม" };
 export const TRAIN_HOUR = 8, OTHER_BRANCH_HOUR = 8;
 // รหัสพิเศษที่เข้า 08:00: ออกตรวจสาขา / On duty
 export const SPECIAL_8 = { VISIT: "ออกตรวจสาขา", "02": "On duty", "2": "On duty", ONDUTY: "On duty" }; // "2" = 02 ที่ Excel ตัดเลข 0 ออก
-export const SHIFT_CHOICES = ["5", "6", "7", "8", "8.30", "9", "9.30", "10", "11", "12", "12.30", "13", "14", "15", "21", "T", "VISIT", "02", "H", "V", "OL", "ลาป่วย"];
+export const SHIFT_CHOICES = ["5", "6", "7", "8", "8.30", "9", "9.30", "10", "11", "12", "12.30", "13", "14", "15", "21", "T", "VISIT", "HUB", "02", "H", "V", "OL", "ลาป่วย"];
 export function normCode(v) {
   let s = String(v ?? "").trim();
   if (/^on\s*d[eu]ty$/i.test(s)) return "ONDUTY";
