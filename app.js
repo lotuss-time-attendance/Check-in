@@ -3,7 +3,7 @@ import { auth, db, $, haversine, fmtDist, getDeviceId, isMobile, isInAppBrowser,
 import { TENANT_QS, TENANT_REGION, TENANT_ID } from "./firebase-config.js";
 import { TENANTS } from "./tenants.js";
 import { STORES } from "./stores.js";
-import { LOOKS, applyLook } from "./filters.js";
+import { LOOKS, applyLook, DEFAULT_LOOK } from "./filters.js";
 import { findTeam, goTeam, resetAllTeams, teamKnown } from "./teamfinder.js";
 document.querySelectorAll('a[href="admin.html"]').forEach((a) => (a.href = "admin.html" + TENANT_QS));
 import { signInWithEmailAndPassword, signOut, onAuthStateChanged, updatePassword, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
@@ -21,10 +21,14 @@ const MAX_DEVICES = 2;
 const NOTE_MIN = 10;
 let me = null, profile = null, branches = [], type = "in", lockedType = null;
 let pos = null, watchId = null, inRange = false, dist = null;
-let stream = null, gesture = null, photo = null, todayCode = "", beauty = 1;
+let stream = null, gesture = null, photo = null, todayCode = "", beauty = DEFAULT_LOOK;
 let monthDays = {};   // กะของเดือนนี้ (รวมรายการที่สลับแล้ว)
 let placeMode = "branch", place = null, map = null, mapLayers = [], overrideDays = new Set(), pendingDays = {}, monthRecs = [], calSel = "", hoursTimer = null;
 const AUTO_OUT_H = 12;
+const SESSION_DAYS = 90; // เข้าสู่ระบบค้างไว้ 90 วัน แล้วบังคับเข้าใหม่ + เปลี่ยนรหัสผ่าน
+// จำอีเมลล่าสุด + ขอให้เบราว์เซอร์เก็บข้อมูลการเข้าสู่ระบบไว้ถาวร (ไม่ลบเองเมื่อพื้นที่เครื่องน้อย)
+try { const em = localStorage.getItem("amci_last_email"); if (em) $("liEmail").value = em; } catch (e) {}
+try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) {}
 let DEMO = false;     // โหมดทดลองสำหรับผู้ดูแล: เห็นทุกขั้นตอน แต่ไม่บันทึกข้อมูล
 const isAdminRole = () => profile && ["rm", "admin", "am"].includes(profile.role);
 
@@ -50,7 +54,17 @@ async function onUser(user) {
     if (!snap.exists()) return blocked("บัญชีนี้ยังไม่ได้ลงทะเบียนในระบบ กรุณาติดต่อหัวหน้า");
     profile = snap.data();
     if (profile.active === false) return blocked("บัญชีนี้ถูกระงับการใช้งาน กรุณาติดต่อหัวหน้า");
-    if (profile.mustChangePassword) { screen("scChangePw"); return; }
+    // ค้างการเข้าสู่ระบบไว้ 3 เดือน → ครบแล้วให้ออก เข้าสู่ระบบใหม่ และตั้งรหัสผ่านใหม่
+    const FORCE_KEY = "amci_pw_force";
+    const signedAt = Date.parse((user.metadata && user.metadata.lastSignInTime) || "") || 0;
+    if (!isAdminRole() && profile.role !== "viewer" && signedAt && Date.now() - signedAt > SESSION_DAYS * 86400000) {
+      try { localStorage.setItem(FORCE_KEY, user.uid); } catch (e) {}
+      await signOut(auth); screen("scLogin");
+      msg("liMsg", "ครบ 3 เดือนแล้ว กรุณาเข้าสู่ระบบอีกครั้ง แล้วตั้งรหัสผ่านใหม่", "ok");
+      return;
+    }
+    let force = false; try { force = localStorage.getItem(FORCE_KEY) === user.uid; } catch (e) {}
+    if (profile.mustChangePassword || force) { screen("scChangePw"); if (force) msg("cpMsg", "ครบ 3 เดือน — ตั้งรหัสผ่านใหม่ก่อนใช้งานต่อ", "ok"); return; }
     if (profile.role === "viewer") { location.href = "rm.html"; return; }
     if (isAdminRole()) { if (new URLSearchParams(location.search).has("demo")) return enterDemo(); screen("scAdmin"); return; }
     await checkDevice();
@@ -72,6 +86,7 @@ $("demoInRange").addEventListener("change", () => {
 /* ---------- ล็อกอิน ---------- */
 $("btnLogin").onclick = async () => {
   const email = $("liEmail").value.trim(), pw = $("liPw").value;
+  try { localStorage.setItem("amci_last_email", email); } catch (e) {}
   if (!email || !pw) return msg("liMsg", "กรุณากรอกอีเมลและรหัสผ่าน");
   busy($("btnLogin"), true);
   try { await signInWithEmailAndPassword(auth, email, pw); msg("liMsg", ""); }
@@ -104,6 +119,7 @@ $("btnChangePw").onclick = async () => {
     await updatePassword(me, a);
     await updateDoc(doc(db, "users", me.uid), { mustChangePassword: false });
     profile.mustChangePassword = false;
+    try { localStorage.removeItem("amci_pw_force"); } catch (e) {}
     msg("cpMsg", "");
     if (["rm", "admin", "am"].includes(profile.role)) { screen("scAdmin"); return; }
     await checkDevice();
@@ -463,6 +479,12 @@ function openCam() {
   $("camInput").value = "";
   $("camInput").click();
 }
+let mirrorShot = false; try { mirrorShot = localStorage.getItem("amci_mirror") === "1"; } catch (e) {}
+$("btnFlip").onclick = () => {
+  mirrorShot = !mirrorShot;
+  try { localStorage.setItem("amci_mirror", mirrorShot ? "1" : "0"); } catch (e) {}
+  if (lastShot) processShot(lastShot);
+};
 let lastShot = null; // ไฟล์ล่าสุด (เปลี่ยนฟิลเตอร์หลังถ่ายได้โดยไม่ต้องถ่ายใหม่)
 $("camInput").addEventListener("change", async (e) => {
   const f = e.target.files && e.target.files[0]; if (!f) return;
@@ -479,7 +501,9 @@ async function processShot(f) {
     const c = $("canvas"), ctx = c.getContext("2d");
     c.width = W; c.height = H;
     ctx.imageSmoothingQuality = "high";
-    ctx.drawImage(bmp, 0, 0, W, H);
+    // กล้องหน้าบางเครื่องบันทึกกลับด้านจากตอนถ่าย → พนักงานกด "กลับด้านรูป" ได้ (จำค่าไว้ในเครื่อง)
+    if (mirrorShot) { ctx.save(); ctx.translate(W, 0); ctx.scale(-1, 1); ctx.drawImage(bmp, 0, 0, W, H); ctx.restore(); }
+    else ctx.drawImage(bmp, 0, 0, W, H);
     if (bmp.close) bmp.close();
     if (beauty && LOOKS[beauty]) { const img = ctx.getImageData(0, 0, W, H); applyLook(img.data, W, H, LOOKS[beauty]); ctx.putImageData(img, 0, 0); }
     const b = curBranch(), fs = Math.max(16, Math.round(W / 34));
@@ -489,7 +513,7 @@ async function processShot(f) {
     ctx.fillText(`เข้างาน · ท่า: ${gesture.text} · ${new Date().toLocaleString("th-TH", { timeZone: "Asia/Bangkok" })}`, 14, H - fs * 0.6);
     for (const q of [0.82, 0.72, 0.62, 0.5, 0.4]) { photo = c.toDataURL("image/jpeg", q); if (photo.length <= 280000) break; } // ไม่เกินขนาดที่ฐานข้อมูลรับได้
     $("shot").src = photo; $("shot").classList.remove("hidden"); $("camPh").classList.add("hidden");
-    $("btnCam").classList.add("hidden"); $("btnRetake").classList.remove("hidden");
+    $("btnCam").classList.add("hidden"); $("btnRetake").classList.remove("hidden"); $("btnFlip").classList.remove("hidden");
     refresh();
   } catch (err) { msg("mMsg", "อ่านรูปไม่ได้ — กดถ่ายเซลฟี่ใหม่"); }
 }
@@ -499,7 +523,7 @@ function stopCam() {
   $("video").classList.add("hidden");
 }
 function resetPhoto() {
-  stopCam(); photo = null; gesture = null; lastShot = null;
+  stopCam(); photo = null; gesture = null; lastShot = null; $("btnFlip").classList.add("hidden");
   $("shot").classList.add("hidden"); $("shot").removeAttribute("src");
   $("camPh").classList.remove("hidden"); $("gesture").classList.add("hidden");
   $("btnCam").classList.remove("hidden"); $("btnShoot").classList.add("hidden"); $("btnRetake").classList.add("hidden");
@@ -509,7 +533,7 @@ $("btnCam").onclick = openCam;
 $("btnRetake").onclick = () => { photo = null; $("shot").classList.add("hidden"); $("camPh").classList.remove("hidden"); refresh(); openCam(); };
 $("btnFilter").onclick = () => {
   beauty = (beauty + 1) % LOOKS.length;
-  try { localStorage.setItem("amci_look", String(beauty)); } catch (e) {}
+  try { localStorage.setItem("amci_look2", String(beauty)); } catch (e) {}
   showBeauty();
   if (photo && lastShot) processShot(lastShot);
 };
@@ -520,7 +544,7 @@ function showBeauty() {
   $("btnFilter").textContent = `✨ ฟิลเตอร์: ${LOOK_NAMES[beauty]} (กดเพื่อเปลี่ยน)`;
   setVidClass($("video"));
 }
-try { const v = parseInt(localStorage.getItem("amci_look"), 10); if (v >= 0 && v < LOOKS.length) beauty = v; } catch (e) {}
+try { const v = parseInt(localStorage.getItem("amci_look2"), 10); if (v >= 0 && v < LOOKS.length) beauty = v; } catch (e) {}
 setTimeout(showBeauty, 0);
 document.addEventListener("visibilitychange", () => { if (document.hidden && stream) resetPhoto(); });
 
