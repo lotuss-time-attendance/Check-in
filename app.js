@@ -619,7 +619,8 @@ function checkAutoOut() {
   autoInfo = null;
   const tin = lastInTime();
   const need = !DEMO && profile.lastType === "in" && tin && Date.now() - tin.getTime() >= AUTO_OUT_H * 3600000;
-  ["mainCard", "camCard", "btnSubmit"].forEach((id) => $(id).classList.toggle("hidden", !!need));
+  ["mainCard", "camCard", "btnSubmit", "outNoPhoto"].forEach((id) => $(id).classList.toggle("hidden", !!need));
+  if (!need && type === "out") $("outNoPhoto").classList.remove("hidden");
   $("autoCard").classList.toggle("hidden", !need);
   if (!need) return;
   const outAt = new Date(tin.getTime() + AUTO_OUT_H * 3600000), inDay = bkkDay(tin);
@@ -629,7 +630,13 @@ function checkAutoOut() {
   $("autoOut").textContent = hhmm(outAt) + " น.";
   autoRefresh();
 }
-const autoRefresh = () => { $("btnAuto").disabled = !(autoInfo && pos && curBranch() && $("autoNote").value.trim().length >= 10); };
+// ไม่บังคับ GPS (ถ้ายังหาตำแหน่งไม่ได้ ใช้พิกัดสาขาแทน) — บอกเหตุผลถ้ายังกดไม่ได้
+const autoRefresh = () => {
+  if (!autoInfo) return;
+  const n = $("autoNote").value.trim().length, b = curBranch();
+  $("btnAuto").disabled = !(b && n >= 10);
+  msg("autoMsg", !b ? "ยังไม่ได้กำหนดสาขาประจำ — ติดต่อ AM" : n < 10 ? `พิมพ์เหตุผลอีก ${10 - n} ตัวอักษร` : "", "err");
+};
 $("autoNote").addEventListener("input", autoRefresh);
 $("btnAuto").onclick = async () => {
   if (!autoInfo || $("btnAuto").disabled) return;
@@ -641,7 +648,7 @@ $("btnAuto").onclick = async () => {
       uid: me.uid, name: profile.name || "", empId: profile.empId || "", position: profile.position || "",
       branchId: b.id, branchName: b.name || "", zoneId: b.zoneId || "", zm: `${b.zoneId || ""}_${autoInfo.inDay.slice(0, 7)}`, type: "out",
       shiftCode: normCode(monthDays[autoInfo.inDay] || ""), ts: serverTimestamp(), day: autoInfo.inDay,
-      lat: pos.latitude, lng: pos.longitude, accuracy: Math.round(pos.accuracy), distance: Math.round(haversine(pos.latitude, pos.longitude, b.lat, b.lng)),
+      lat: pos ? pos.latitude : b.lat, lng: pos ? pos.longitude : b.lng, accuracy: pos ? Math.round(pos.accuracy) : -1, distance: pos ? Math.round(haversine(pos.latitude, pos.longitude, b.lat, b.lng)) : -1,
       gesture: "", hasPhoto: false, offsite: true, deviceId, ua: navigator.userAgent.slice(0, 300),
       note: `ลืมกดออก — ระบบปิดให้ ${hhmm(autoInfo.outAt)} · ออกจริง ${real || "ไม่ระบุ"} · ${reason}`.slice(0, 300),
       autoOut: true, outAt: autoInfo.outAt.getTime(), realOut: real || ""
