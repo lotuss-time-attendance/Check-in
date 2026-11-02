@@ -592,7 +592,9 @@ function parseShiftRows(rows) {
   return { rows: out, month: months.sort((a, b) => cols.filter((c) => c[1].startsWith(b)).length - cols.filter((c) => c[1].startsWith(a)).length)[0] };
 }
 
+let shiftMonthNote = "";
 $("sFile").onchange = async (e) => {
+  shiftMonthNote = "";
   const f = e.target.files[0]; if (!f) return;
   parsedShift = null; $("btnSSave").classList.add("hidden"); $("tShiftPrev").innerHTML = "";
   msg("sMsg", "กำลังอ่านไฟล์...", "ok");
@@ -601,9 +603,10 @@ $("sFile").onchange = async (e) => {
     const wb = XLSX.read(await f.arrayBuffer(), { type: "array" });
     const formSheet = wb.SheetNames.find((n) => n.includes("ตารางกะ") && /^\d_/.test(n)) || (isFormShiftSheet(wb.Sheets[wb.SheetNames[0]], XLSX) ? wb.SheetNames[0] : null);
     if (formSheet) {
-      const month = formMonth(wb, XLSX) || $("sMonth").value;
+      // ใช้เดือนที่เลือกในช่อง "เดือนของตารางกะ" เป็นหลัก (แท็บ 0_ข้อมูลAM คือเดือนแรกที่เริ่มใช้ ไม่ใช่เดือนของไฟล์นี้เสมอไป)
+      const fm = formMonth(wb, XLSX), month = $("sMonth").value || fm;
       if (!month) throw new Error("ไฟล์แบบฟอร์ม: เลือก \"เดือนของตารางกะ\" ก่อนอัปโหลด");
-      $("sMonth").value = month;
+      if (fm && fm !== month) shiftMonthNote = `หมายเหตุ: แท็บ 0_ข้อมูลAM ระบุเดือน ${fm} — ระบบบันทึกเป็นเดือน ${month} ตามที่เลือก (ถ้าไม่ถูก เปลี่ยนช่องเดือนแล้วเลือกไฟล์ใหม่)`;
       parsedShift = { month, rows: parseFormShift(sheetRows(wb, formSheet, XLSX), month, []) };
     } else {
       const ws = wb.Sheets[wb.SheetNames[0]];
@@ -617,10 +620,10 @@ $("sFile").onchange = async (e) => {
         const outZone = !isRM() && r.zoneId && r.zoneId !== me.zoneId;
         const unknown = [...new Set(Object.values(r.days).filter((c) => !shiftInfo(c)))];
         return `<tr><td>${esc(r.store)}</td><td>${esc(r.name)}</td><td>${esc(r.nickname)}</td><td>${esc(r.phone || (r.empId ? "รหัส " + r.empId : ""))}</td><td>${Object.keys(r.days).length}</td>
-          <td>${outZone ? `<span class="tag off">นอกเขตของคุณ — ข้าม</span>` : !r.phoneKey ? `<span class="tag off">ไม่มีเบอร์</span>` : u ? `<span class="tag in">${esc(u.email)}</span>` : `<span class="tag warn">ยังไม่มีบัญชี</span>`}</td>
+          <td>${outZone ? `<span class="tag off">นอกเขตของคุณ — ข้าม</span>` : !r.phoneKey ? `<span class="tag off">ไม่มีเบอร์</span>` : u ? `<span class="tag in">${esc(u.email)}</span>${r.matchBy === "name" ? ` <span class="tag warn" title="จับคู่จากชื่อ — ระบบจะเติมรหัสพนักงานให้บัญชีนี้">จากชื่อ</span>` : ""}` : `<span class="tag warn">ยังไม่มีบัญชี</span>`}</td>
           <td>${unknown.length ? `<span class="tag warn">${esc(unknown.join(", "))}</span>` : "-"}</td></tr>`;
       }).join("");
-    msg("sMsg", `เดือน ${parsedShift.month} · พนักงาน ${parsedShift.rows.length} คน · จับคู่บัญชีได้ ${matched} คน (คนที่ยังไม่มีบัญชี บันทึกกะไว้ก่อนได้ เพิ่มบัญชีทีหลังจะจับคู่ให้อัตโนมัติด้วยเบอร์โทร/รหัสพนักงาน)`, "ok");
+    msg("sMsg", `${shiftMonthNote ? shiftMonthNote + " · " : ""}เดือน ${parsedShift.month} · พนักงาน ${parsedShift.rows.length} คน · จับคู่บัญชีได้ ${matched} คน (คนที่ยังไม่มีบัญชี บันทึกกะไว้ก่อนได้ เพิ่มบัญชีทีหลังจะจับคู่ให้อัตโนมัติด้วยเบอร์โทร/รหัสพนักงาน)`, "ok");
     $("btnSSave").classList.remove("hidden");
   } catch (err) { msg("sMsg", errText(err)); }
 };
@@ -630,6 +633,11 @@ $("btnSSave").onclick = async () => {
   const rows = parsedShift.rows.filter((r) => r.phoneKey && (isRM() || r.zoneId === me.zoneId));
   busy($("btnSSave"), true);
   try {
+    // บัญชีเดิมที่จับคู่จากชื่อ: เติมรหัสพนักงานให้ เดือนต่อไปจับคู่ด้วยรหัสได้ทันที
+    for (const r of rows) {
+      if (r.matchBy === "name" && r.empId) { try { await updateDoc(doc(db, "users", r.matchUid), { empId: r.empId }); const u = users.find((x) => x.uid === r.matchUid); if (u) u.empId = r.empId; } catch (e) {} }
+      delete r.matchBy; delete r.matchUid;
+    }
     await saveShiftRows(parsedShift.month, rows);
     msg("sMsg", `บันทึกตารางกะเดือน ${parsedShift.month} แล้ว ${rows.length} คน` + (rows.length < parsedShift.rows.length ? ` · ข้าม ${parsedShift.rows.length - rows.length} คน (ไม่มีเบอร์โทร/อยู่นอกเขต)` : ""), "ok");
     $("btnSSave").classList.add("hidden");
@@ -670,17 +678,23 @@ function parseFormShift(rows, month, formStaff) {
     if (!empId) continue;
     const days = {};
     cols.forEach(([c, d]) => { const v = normCode(cellStr(r[c])); if (v) days[d] = v; });
-    const u = users.find((x) => cellStr(x.empId) === empId) || formStaff.find((x) => x.empId === empId) || {};
+    const nm = cellStr(r[1]), nn = (v) => String(v ?? "").replace(/\s+/g, "");
+    let by = "";
+    let u = users.find((x) => cellStr(x.empId) === empId);
+    if (u) by = "empId";
+    else if (nm && (u = users.find((x) => nn(x.name) && nn(x.name) === nn(nm)))) by = "name";
+    if (!u) u = formStaff.find((x) => x.empId === empId) || {};
     const bId = u.branchId || "";
     out.push({ store: bId ? `${bId} ${bName(bId)}` : "", branchId: bId, zoneId: u.zoneId || bZoneOf(bId) || (isRM() ? "" : me.zoneId), name: cellStr(r[1]) || u.name || "",
-      nickname: u.nickname || "", position: u.position || "", phone: "", phoneKey: empKey(empId), empId, days });
+      nickname: u.nickname || "", position: u.position || "", phone: "", phoneKey: (u.uid && u.phoneKey) || empKey(empId), empId, days,
+      ...(u.uid ? { matchUid: u.uid, matchBy: by } : {}) });
   }
   return out;
 }
 async function saveShiftRows(month, rows) {
   for (let i = 0; i < rows.length; i += 400) {
     const batch = writeBatch(db);
-    rows.slice(i, i + 400).forEach((r) => batch.set(doc(db, "shifts", `${month}_${r.phoneKey}`), { ...r, month, updatedAt: serverTimestamp() }));
+    rows.slice(i, i + 400).forEach(({ matchBy, matchUid, ...r }) => batch.set(doc(db, "shifts", `${month}_${r.phoneKey}`), { ...r, month, updatedAt: serverTimestamp() }));
     await batch.commit();
   }
 }
