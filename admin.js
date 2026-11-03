@@ -68,7 +68,7 @@ onAuthStateChanged(auth, async (user) => {
     loadDevices();
     const today = bkkDay();
     $("rFrom").value = today; $("rTo").value = today;
-    $("aMonth").value = today.slice(0, 7); $("roMonth").value = today.slice(0, 7); $("sMonth").value = today.slice(0, 7); $("aGrace").textContent = LATE_GRACE_MIN;
+    $("aMonth").value = today.slice(0, 7); $("roMonth").value = today.slice(0, 7); $("lvMonth").value = today.slice(0, 7); $("sMonth").value = today.slice(0, 7); $("aGrace").textContent = LATE_GRACE_MIN;
     runToday(); loadShiftRequests();
   } catch (e) { screen("scLogin"); msg("liMsg", e && e.code === "permission-denied" ? "ล็อกอินได้แต่ฐานข้อมูลปฏิเสธการอ่าน — ตรวจว่าวาง Rules ล่าสุดใน Firebase และกด Publish แล้ว" : errText(e)); }
 });
@@ -92,13 +92,14 @@ $("btnLogout").onclick = () => signOut(auth);
 $("tabs").addEventListener("click", (e) => {
   const b = e.target.closest("button"); if (!b) return;
   [...$("tabs").children].forEach((x) => x.classList.toggle("on", x === b));
-  ["today", "report", "shifts", "roster", "devices", "users", "branches", "zones", "tools"].forEach((t) => $("t-" + t).classList.toggle("hidden", t !== b.dataset.t));
+  ["today", "report", "shifts", "roster", "leave", "devices", "users", "branches", "zones", "tools"].forEach((t) => $("t-" + t).classList.toggle("hidden", t !== b.dataset.t));
   if (b.dataset.t === "today") runToday();
   if (b.dataset.t === "report" && !reportLoaded) { reportLoaded = true; runReport(); }
   if (b.dataset.t === "shifts") { loadShiftRequests(); if (!att.sums.length) runAtt(); }
   if (b.dataset.t === "devices") loadDevices();
   if (b.dataset.t === "roster" && roster.month !== $("roMonth").value) runRoster();
   if (b.dataset.t === "zones") loadZones();
+  if (b.dataset.t === "leave" && lv.month !== $("lvMonth").value) runLeave();
 });
 
 /* ---------- photo modal ---------- */
@@ -130,6 +131,7 @@ async function loadBranches() {
   $("rBranch").innerHTML = `<option value="">ทุกสาขา</option>` + opts;
   $("aBranch").innerHTML = `<option value="">ทุกสาขา</option>` + opts;
   $("roBranch").innerHTML = `<option value="">ทุกสาขา</option>` + opts;
+  $("lvBranch").innerHTML = `<option value="">ทุกสาขา</option>` + opts;
   $("uBranch").innerHTML = `<option value="">— ไม่ระบุ —</option>` + opts;
   $("tBranches").innerHTML = `<tr><th>รหัส</th><th>ชื่อสาขา</th><th>เขต</th><th>พิกัด</th><th>รัศมี</th><th>แผนที่</th><th></th></tr>` +
     branches.map((b) => {
@@ -805,7 +807,7 @@ async function loadShiftDocs(month) {
   const qz = (c) => isRM() ? query(collection(db, c), where("month", "==", month)) : query(collection(db, c), where("month", "==", month), where("zoneId", "==", me.zoneId));
   const [sh, ov] = await Promise.all([getDocs(qz("shifts")), getDocs(qz("shiftOverrides")).catch(() => ({ docs: [] }))]);
   const ovMap = new Map(ov.docs.map((d) => [d.id, d.data()]));
-  return sh.docs.map((d) => { const s = d.data(); const o = ovMap.get(d.id); return { key: d.id, ...s, days: mergeDays(s, o), edited: o ? Object.keys(o.days || {}) : [] }; });
+  return sh.docs.map((d) => { const s = d.data(); const o = ovMap.get(d.id); return { key: d.id, ...s, days: mergeDays(s, o), edited: o ? Object.keys(o.days || {}) : [], hr: (o && o.hr) || {} }; });
 }
 // คำนวณสถานะรายวันตามกะ ช่วง fromDay..toDay
 async function attendanceCore(month, fromDay, toDay) {
@@ -1260,3 +1262,126 @@ $("btnRoster").onclick = runRoster;
 ["roBranch", "roAcct"].forEach((i) => $(i).addEventListener("change", renderRoster));
 $("roSearch").addEventListener("input", renderRoster);
 $("roMonth").addEventListener("change", runRoster);
+
+
+/* ================= ตรวจวันลา: AM เช็กว่าพนักงานคีย์ลาในระบบ HR แล้ว =================
+   เก็บสถานะไว้ในเอกสาร shiftOverrides เดิม (ฟิลด์ hr) → ใช้ Rules เดิม ไม่ต้อง Publish ใหม่
+   hr = { "YYYY-MM-DD": { s: "ok" | "no", code, by, at } } · ไม่กระทบกะ (ระบบอ่านเฉพาะฟิลด์ days) */
+let lv = { month: "", rows: [], filter: "todo", sel: new Set() };
+const LV_ST = { todo: ["warn", "⏳ ยังไม่ตรวจ"], ok: ["in", "✅ คีย์ HR แล้ว"], no: ["off", "❌ ยังไม่คีย์"] };
+const lvId = (r) => `${r.key}|${r.day}`;
+async function runLeave() {
+  const month = $("lvMonth").value; if (!month) return;
+  busy($("btnLeave"), true, "กำลังโหลด...");
+  try {
+    const docs = await loadShiftDocs(month), rows = [];
+    const hasAcct = new Set(users.filter((u) => u.phoneKey).map((u) => u.phoneKey));
+    for (const s of docs) for (const day of Object.keys(s.days || {}).sort()) {
+      const code = s.days[day], i = shiftInfo(code);
+      if (!i || !i.off || /วันหยุด/.test(i.off)) continue; // เฉพาะวันลา (ไม่รวมวันหยุด H/OFF)
+      const h = s.hr[day];
+      // ถ้ากะถูกเปลี่ยนประเภทลาหลังตรวจ → กลับเป็น "ยังไม่ตรวจ"
+      const st = h && (!h.code || h.code === normCode(code)) ? h.s : "todo";
+      rows.push({ key: s.key, phoneKey: s.phoneKey, zoneId: s.zoneId || bZoneOf(s.branchId), branchId: s.branchId, store: s.store || s.branchId || "",
+        name: s.name || "", nickname: s.nickname || "", empId: s.empId || "", day, code: normCode(code), type: i.off, st, by: h ? h.by || "" : "", at: h ? h.at || "" : "", acct: hasAcct.has(s.phoneKey) });
+    }
+    rows.sort((a, b) => a.day.localeCompare(b.day) || String(a.store).localeCompare(String(b.store), "th") || a.name.localeCompare(b.name, "th"));
+    lv = { month, rows, filter: lv.filter, sel: new Set() };
+    msg("lvMsg", docs.length ? `อัปเดต ${fmtDateTime(new Date())}` : `ยังไม่มีตารางกะเดือน ${month}`, docs.length ? "ok" : "err");
+    renderLeave();
+  } catch (e) { msg("lvMsg", errText(e)); }
+  finally { busy($("btnLeave"), false); }
+}
+function lvBase() {
+  const br = $("lvBranch").value, q = $("lvSearch").value.trim().toLowerCase(), past = $("lvRange").value !== "all", today = bkkDay();
+  return lv.rows.filter((r) => (!br || r.branchId === br) && (!q || `${r.name} ${r.nickname}`.toLowerCase().includes(q)) && (!past || r.day <= today));
+}
+function lvShown() { const f = lv.filter; return lvBase().filter((r) => f === "all" || r.st === f); }
+function renderLeave() {
+  const base = lvBase(), cnt = { all: base.length, todo: 0, ok: 0, no: 0 };
+  base.forEach((r) => cnt[r.st]++);
+  // ป้ายแจ้งเตือนบนแท็บ = ลาไปแล้วแต่ยังไม่ยืนยันว่าคีย์ HR
+  const today = bkkDay(), pend = lv.rows.filter((r) => r.day <= today && r.st !== "ok").length;
+  $("lvBadge").textContent = pend; $("lvBadge").classList.toggle("hidden", !pend);
+  $("lvStats").innerHTML = [["วันลาทั้งหมด", cnt.all], ["คีย์ HR แล้ว", cnt.ok], ["ยังไม่ตรวจ", cnt.todo], ["ยังไม่คีย์ (ต้องตาม)", cnt.no]]
+    .map(([l, v]) => `<div class="stat"><span class="muted">${l}</span><b>${v}</b></div>`).join("");
+  $("lvChips").innerHTML = [["todo", "ยังไม่ตรวจ"], ["no", "ยังไม่คีย์"], ["ok", "คีย์แล้ว"], ["all", "ทั้งหมด"]]
+    .map(([k, l]) => `<button type="button" data-f="${k}" class="${lv.filter === k ? "on" : ""}">${l} (${cnt[k]})</button>`).join("");
+  const rows = lvShown();
+  const allSel = rows.length && rows.every((r) => lv.sel.has(lvId(r)));
+  $("tLeave").innerHTML = `<tr><th><input type="checkbox" id="lvSelAll"${allSel ? " checked" : ""} title="เลือกทั้งหมด"></th><th>วันที่</th><th>สาขา</th><th>ชื่อ</th><th>ประเภท</th><th>สถานะ HR</th><th>ตรวจโดย</th><th>บันทึกสถานะ</th></tr>` +
+    (rows.map((r) => { const t = LV_ST[r.st], id = esc(lvId(r));
+      return `<tr class="${lv.sel.has(lvId(r)) ? "lv-sel" : ""}"><td><input type="checkbox" data-lvsel="${id}"${lv.sel.has(lvId(r)) ? " checked" : ""}></td><td>${r.day}</td><td>${esc(r.store)}</td>
+        <td>${esc(r.name)}${r.nickname ? ` (${esc(r.nickname)})` : ""}${r.acct ? "" : ` <span class="tag warn">ไม่มีบัญชี</span>`}</td><td>${esc(r.type)}</td>
+        <td><span class="tag ${t[0]}">${t[1]}</span></td><td class="muted">${r.by ? `${esc(r.by)}<br>${esc(fmtDateTime(new Date(r.at)))}` : "-"}</td>
+        <td class="lv-act"><button class="btn sm primary" data-lv="${id}|ok" title="คีย์ HR แล้ว">✅</button><button class="btn sm danger" data-lv="${id}|no" title="ยังไม่คีย์">❌</button>${r.st !== "todo" ? `<button class="btn sm" data-lv="${id}|todo" title="ล้างสถานะ">↺</button>` : ""}</td></tr>`; }).join("")
+      || `<tr><td colspan="8" class="muted">${lv.month ? "ไม่มีรายการ" : "เลือกเดือนแล้วกดค้นหา"}</td></tr>`);
+}
+async function setLeaveSt(list, st) {
+  if (!list.length) return;
+  const by = me.name || me.email || "AM", at = new Date().toISOString();
+  const groups = new Map(); // รวมตามเอกสาร (คน/เดือน) → เขียนครั้งเดียว
+  list.forEach((r) => { (groups.get(r.key) || groups.set(r.key, { r, hr: {} }).get(r.key)).hr[r.day] = st === "todo" ? deleteField() : { s: st, code: r.code, by, at }; });
+  const ents = [...groups.values()];
+  for (let i = 0; i < ents.length; i += 400) {
+    const b = writeBatch(db);
+    ents.slice(i, i + 400).forEach(({ r, hr }) => b.set(doc(db, "shiftOverrides", r.key), { month: r.key.slice(0, 7), phoneKey: r.phoneKey, zoneId: r.zoneId || "", hr }, { merge: true }));
+    await b.commit();
+  }
+  list.forEach((r) => { r.st = st; r.by = st === "todo" ? "" : by; r.at = st === "todo" ? "" : at; lv.sel.delete(lvId(r)); });
+  renderLeave();
+}
+$("btnLeave").onclick = runLeave;
+$("lvMonth").addEventListener("change", runLeave);
+["lvBranch", "lvRange"].forEach((i) => $(i).addEventListener("change", renderLeave));
+$("lvSearch").addEventListener("input", renderLeave);
+$("lvChips").addEventListener("click", (e) => { const b = e.target.closest("button"); if (!b) return; lv.filter = b.dataset.f; lv.sel.clear(); renderLeave(); });
+$("tLeave").addEventListener("click", async (e) => {
+  const b = e.target.closest("button[data-lv]");
+  if (b) {
+    const parts = b.dataset.lv.split("|"), st = parts.pop(), id = parts.join("|"), r = lv.rows.find((x) => lvId(x) === id);
+    if (!r) return;
+    b.disabled = true;
+    try { await setLeaveSt([r], st); } catch (err) { alert(errText(err)); b.disabled = false; }
+    return;
+  }
+  if (e.target.id === "lvSelAll") { const rows = lvShown(); rows.forEach((r) => e.target.checked ? lv.sel.add(lvId(r)) : lv.sel.delete(lvId(r))); renderLeave(); return; }
+  const c = e.target.dataset && e.target.dataset.lvsel;
+  if (c) { e.target.checked ? lv.sel.add(c) : lv.sel.delete(c); e.target.closest("tr").classList.toggle("lv-sel", e.target.checked); }
+});
+async function bulkLeave(st, btn) {
+  const list = lvShown().filter((r) => lv.sel.has(lvId(r)));
+  if (!list.length) return msg("lvMsg", "ติ๊กเลือกรายการก่อน (ช่องซ้ายสุด)");
+  busy(btn, true, "กำลังบันทึก...");
+  try { await setLeaveSt(list, st); msg("lvMsg", `บันทึกแล้ว ${list.length} รายการ`, "ok"); } catch (err) { msg("lvMsg", errText(err)); }
+  finally { busy(btn, false); }
+}
+$("lvAllOk").onclick = () => bulkLeave("ok", $("lvAllOk"));
+$("lvAllNo").onclick = () => bulkLeave("no", $("lvAllNo"));
+// ข้อความสั้นสำหรับส่ง LINE (ระบบไม่ส่งเอง — คัดลอกไปวาง)
+$("lvCopy").onclick = async () => {
+  const list = lvBase().filter((r) => r.st !== "ok");
+  if (!list.length) return msg("lvMsg", "ไม่มีรายการค้าง — ทุกวันลาคีย์ HR แล้ว", "ok");
+  const by = new Map();
+  list.forEach((r) => { const k = `${r.name}${r.nickname ? ` (${r.nickname})` : ""} · ${r.store}`; (by.get(k) || by.set(k, []).get(k)).push(`${Number(r.day.slice(8))}/${Number(r.day.slice(5, 7))} ${r.type}`); });
+  const txt = `📌 รบกวนคีย์วันลาในระบบ HR ให้เรียบร้อย\n` + [...by.entries()].map(([k, v], i) => `${i + 1}. ${k}\n   ${v.join(", ")}`).join("\n") + `\nคีย์แล้วแจ้งกลับด้วยครับ/ค่ะ 🙏`;
+  try { await navigator.clipboard.writeText(txt); msg("lvMsg", `คัดลอกแล้ว ${by.size} คน — วางใน LINE ได้เลย`, "ok"); }
+  catch (e) { prompt("คัดลอกข้อความนี้", txt); }
+};
+$("lvXlsx").onclick = async () => {
+  const rows = lvBase(); if (!rows.length) return msg("lvMsg", "ไม่มีข้อมูล");
+  busy($("lvXlsx"), true, "กำลังสร้างไฟล์...");
+  try {
+    const XLSX = await loadXLSX();
+    const aoa = [["วันที่", "สาขา", "รหัสพนักงาน", "ชื่อ", "ชื่อเล่น", "ประเภทลา", "สถานะ HR", "ตรวจโดย", "เวลาที่ตรวจ"],
+      ...rows.map((r) => [r.day, r.store, r.empId, r.name, r.nickname, r.type, LV_ST[r.st][1].replace(/^\S+\s/, ""), r.by, r.at ? fmtDateTime(new Date(r.at)) : ""])];
+    const wb = XLSX.utils.book_new(), ws = XLSX.utils.aoa_to_sheet(aoa);
+    ws["!cols"] = aoa[0].map((h) => ({ wch: Math.max(12, h.length + 6) }));
+    XLSX.utils.book_append_sheet(wb, ws, "ตรวจวันลา");
+    const out = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+    const url = URL.createObjectURL(new Blob([out], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
+    const a = document.createElement("a"); a.href = url; a.download = `${bkkDay()}_ตรวจวันลา_${lv.month}.xlsx`;
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 5000);
+  } catch (err) { msg("lvMsg", errText(err)); }
+  finally { busy($("lvXlsx"), false); }
+};

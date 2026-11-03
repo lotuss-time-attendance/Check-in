@@ -31,6 +31,7 @@
       <button data-t="report">รายงานเข้า-ออก</button>
       <button data-t="shifts">กะ &amp; มาสาย/ขาด <span id="rqBadge" class="badge hidden">0</span></button>
       <button data-t="roster">ตารางกะ</button>
+      <button data-t="leave">ตรวจวันลา <span id="lvBadge" class="badge hidden">0</span></button>
       <button data-t="devices">คำขอเปลี่ยนเครื่อง <span id="devBadge" class="badge hidden">0</span></button>
       <button data-t="users">พนักงาน</button>
       <button data-t="branches">สาขา</button>
@@ -142,6 +143,31 @@
         <p class="msg" id="roMsg"></p>
         <div class="ro-legend"><span><i class="r-work"></i>กะทำงาน (ตัวเลข = ชั่วโมงเข้างาน)</span><span><i class="r-off"></i>H วันหยุด</span><span><i class="r-leave"></i>ลา / พักร้อน</span><span><i class="r-train"></i>T/MT อบรม · Visit · On duty (เข้า 08:00)</span><span><i class="r-branch"></i>รหัสสาขา = ต่างสาขา (เข้า 08:00)</span><span><i class="r-edit"></i>แก้/สลับแล้ว</span><span><i class="r-pend"></i>รออนุมัติ (→ กะที่ขอ)</span></div>
         <div class="tbl-wrap scroll-y roster"><table id="tRoster"></table></div>
+      </div>
+    </div>
+
+    <!-- ตรวจวันลา: AM เช็กว่าพนักงานคีย์ลาในระบบ HR แล้ว -->
+    <div id="t-leave" class="hidden">
+      <div class="card">
+        <h3>ตรวจวันลา · คีย์ในระบบ HR แล้วหรือยัง</h3>
+        <p class="muted">ดึงวันลาจากตารางกะ (ลากิจ OL/ลก · พักร้อน V · ลาป่วย · ลาคลอด) รวมกะที่แก้/อนุมัติสลับแล้ว · เช็กในระบบ HR แล้วกดสถานะ</p>
+        <div class="grid">
+          <label>เดือน<input id="lvMonth" type="month"></label>
+          <label>สาขา<select id="lvBranch"></select></label>
+          <label>ค้นหาชื่อ<input id="lvSearch" placeholder="ชื่อ / ชื่อเล่น"></label>
+          <label>ช่วงวัน<select id="lvRange"><option value="past">ถึงวันนี้ (ลาไปแล้ว)</option><option value="all">ทั้งเดือน (รวมลาล่วงหน้า)</option></select></label>
+        </div>
+        <div class="row" style="max-width:220px"><button id="btnLeave" class="btn primary">ค้นหา</button></div>
+        <p class="msg" id="lvMsg"></p>
+        <div class="stats" id="lvStats"></div>
+        <div class="chips" id="lvChips"></div>
+        <div class="row lv-bulk">
+          <button id="lvAllOk" class="btn sm primary">✅ คีย์แล้ว (ที่เลือก)</button>
+          <button id="lvAllNo" class="btn sm danger">❌ ยังไม่คีย์ (ที่เลือก)</button>
+          <button id="lvCopy" class="btn sm">📋 คัดลอกข้อความตามงาน</button>
+          <button id="lvXlsx" class="btn sm">⬇️ Excel</button>
+        </div>
+        <div class="tbl-wrap scroll-y"><table id="tLeave"></table></div>
       </div>
     </div>
 
