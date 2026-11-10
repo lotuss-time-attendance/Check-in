@@ -223,3 +223,9 @@ th{background:#f4f7fe;color:var(--brand-2)}
 #tLeave td.lv-act{white-space:nowrap}
 #tLeave td.lv-act .btn{width:auto;display:inline-block;margin:0 2px}
 #tLeave tr.lv-sel{background:#fff8e1}
+
+/* วิธีแก้เมื่อหาตำแหน่งไม่ได้ */
+.geo-help{margin-top:8px;padding:12px;border:1px solid #f3d9a4;background:#fffaf0;border-radius:12px;font-size:.9rem;line-height:1.55;color:#5b4300}
+.geo-help ol{margin:6px 0 10px;padding-left:20px}
+.geo-help li{margin:4px 0}
+.geo-help .btn{width:100%}

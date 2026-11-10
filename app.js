@@ -338,20 +338,60 @@ function setType(v) {
 
 /* ---------- GPS ---------- */
 function setLoc(kind, text) { const el = $("locBox"); el.className = "loc " + kind; el.textContent = text; }
+/* ---------- ตำแหน่ง: ถ้าถูกปฏิเสธ/หานานผิดปกติ → แสดงวิธีแก้ตามรุ่นเครื่อง + ปุ่มลองใหม่ ---------- */
+let geoTimer = null;
+const isIOS = () => /iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+const isSamsungBrowser = () => /SamsungBrowser/i.test(navigator.userAgent);
+function geoHelpSteps(reason) {
+  if (isIOS()) return [
+    "การตั้งค่า → ความเป็นส่วนตัวและความปลอดภัย → <b>บริการหาตำแหน่ง</b> → เปิด",
+    "ในหน้าเดียวกัน เลื่อนหา <b>เว็บไซต์ Safari</b> (Safari Websites) → เลือก <b>ขณะใช้แอป</b> และเปิด <b>ตำแหน่งที่แม่นยำ</b>",
+    "กลับมา Safari แตะ <b>กก / aA</b> ข้างช่องลิงก์ → การตั้งค่าเว็บไซต์ → ตำแหน่ง → <b>อนุญาต</b>",
+    reason === "slow" ? "ถ้าแบตเตอรี่ต่ำ ให้ปิด <b>โหมดประหยัดพลังงาน</b> แล้วกดลองใหม่" : "กดปุ่ม <b>ลองใหม่</b> ด้านล่าง ถ้ามีหน้าต่างถามตำแหน่ง ให้กด <b>อนุญาต</b>",
+  ];
+  const br = isSamsungBrowser() ? "Samsung Internet" : "Chrome";
+  return [
+    "ปัดแถบด้านบนลง → เปิด <b>ตำแหน่ง (Location)</b>",
+    `การตั้งค่า → แอป → <b>${br}</b> (ไม่ใช่แอป Google) → การอนุญาต → ตำแหน่ง → <b>อนุญาตขณะใช้แอป</b> + เปิด <b>ใช้ตำแหน่งที่แน่นอน</b>`,
+    `ใน ${br}: ⋮ → การตั้งค่า → การตั้งค่าเว็บไซต์ → ตำแหน่ง → สวิตช์ด้านบนต้อง <b>เปิด</b> · ถ้ามี lotuss-time-attendance.github.io ในรายการ "บล็อก" ให้เปลี่ยนเป็น <b>อนุญาต</b>`,
+    "ถ้าเปิดจากไอคอนหน้าจอโฮม: การตั้งค่า → แอป → หาชื่อ <b>AM Check-In</b> → เปิดสิทธิ์ตำแหน่งด้วย",
+    "แตะไอคอนซ้ายช่องลิงก์ → สิทธิ์ → <b>รีเซ็ต</b> แล้วกด <b>ลองใหม่</b> → เมื่อถาม ให้กด <b>อนุญาต</b> (อย่ากด \"เฉพาะครั้งนี้\")",
+  ];
+}
+function showGeoHelp(reason) {
+  const el = $("geoHelp"); if (!el) return;
+  const title = reason === "denied" ? "เครื่องยังไม่อนุญาตให้ใช้ตำแหน่ง — ทำตามนี้" : reason === "slow" ? "หาตำแหน่งนานผิดปกติ — ลองตรวจตามนี้" : "หาตำแหน่งไม่ได้ — ลองตรวจตามนี้";
+  el.innerHTML = `<b>${title}</b><ol>${geoHelpSteps(reason).map((t) => `<li>${t}</li>`).join("")}</ol><button type="button" class="btn" id="btnGeoRetry">🔄 ลองใหม่</button>`;
+  el.classList.remove("hidden");
+  $("btnGeoRetry").onclick = () => startGeo();
+}
+function hideGeoHelp() { const el = $("geoHelp"); if (el) el.classList.add("hidden"); }
 function startGeo() {
   if (!("geolocation" in navigator)) { setLoc("bad", "✗ อุปกรณ์นี้ไม่รองรับการหาตำแหน่ง"); return; }
+  if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+  clearTimeout(geoTimer); hideGeoHelp();
   setLoc("wait", "📍 กำลังหาตำแหน่ง...");
-  watchId = navigator.geolocation.watchPosition(
-    (p) => { pos = p.coords; updateLoc(); autoRefresh(); },
+  const ok = (p) => { clearTimeout(geoTimer); hideGeoHelp(); pos = p.coords; updateLoc(); autoRefresh(); };
+  watchId = navigator.geolocation.watchPosition(ok,
     (e) => {
+      if (pos && e.code !== 1) return; // มีตำแหน่งแล้ว — สัญญาณหลุดชั่วคราว ไม่ต้องเตือน
+      clearTimeout(geoTimer);
       pos = null; inRange = false;
       setLoc("bad", e.code === 1
-        ? "✗ ไม่ได้รับอนุญาตให้ใช้ตำแหน่ง — เปิด Location ในเครื่อง และกดอนุญาตในเบราว์เซอร์"
+        ? "✗ ไม่ได้รับอนุญาตให้ใช้ตำแหน่ง — ดูวิธีแก้ด้านล่าง"
         : "✗ หาตำแหน่งไม่ได้ — เปิด Location แล้วเดินไปใกล้หน้าต่างหรือที่โล่ง");
+      showGeoHelp(e.code === 1 ? "denied" : "fail");
       refresh();
     },
     { enableHighAccuracy: true, maximumAge: 5000, timeout: 20000 }
   );
+  // 15 วินาทียังไม่ได้ตำแหน่ง (เช่น ยังไม่ได้ตอบหน้าต่างขอสิทธิ์ / GPS ในอาคาร) → ลองแบบความแม่นยำปกติ + แสดงวิธีแก้
+  geoTimer = setTimeout(() => {
+    if (pos) return;
+    navigator.geolocation.getCurrentPosition(ok, () => {}, { enableHighAccuracy: false, maximumAge: 60000, timeout: 15000 });
+    setLoc("wait", "📍 กำลังหาตำแหน่ง... (นานกว่าปกติ)");
+    showGeoHelp("slow");
+  }, 15000);
 }
 const isOff = () => placeMode === "off";
 const noteText = () => $("mNote").value.trim();
@@ -822,6 +862,7 @@ $("cal").addEventListener("click", (e) => { const b = e.target.closest("button[d
 function stopAll() {
   clearInterval(hoursTimer); hoursTimer = null;
   if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+  clearTimeout(geoTimer); hideGeoHelp();
   watchId = null; pos = null; inRange = false;
   stopCam();
 }
