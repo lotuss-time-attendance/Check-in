@@ -29,6 +29,7 @@ const SESSION_DAYS = 90; // เข้าสู่ระบบค้างไว�
 // จำอีเมลล่าสุด + ขอให้เบราว์เซอร์เก็บข้อมูลการเข้าสู่ระบบไว้ถาวร (ไม่ลบเองเมื่อพื้นที่เครื่องน้อย)
 try { const em = localStorage.getItem("amci_last_email"); if (em) $("liEmail").value = em; } catch (e) {}
 try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) {}
+let loginPw = "";   // รหัสผ่านที่เพิ่งกรอก (อยู่ในหน่วยความจำชั่วคราวเท่านั้น)
 let DEMO = false;     // โหมดทดลองสำหรับผู้ดูแล: เห็นทุกขั้นตอน แต่ไม่บันทึกข้อมูล
 const isAdminRole = () => profile && ["rm", "admin", "am"].includes(profile.role);
 
@@ -51,7 +52,21 @@ async function onUser(user) {
   screen("scLoading");
   try {
     const snap = await getDoc(doc(db, "users", user.uid));
-    if (!snap.exists()) return blocked("บัญชีนี้ยังไม่ได้ลงทะเบียนในระบบ กรุณาติดต่อหัวหน้า");
+    if (!snap.exists()) {
+      // ล็อกอินได้แต่ไม่มีรายชื่อในทีมนี้ → อาจเข้าผิดทีม (เคยถูกเพิ่มทีมนี้แล้วลบออก) → ค้นหาทีมที่มีรายชื่อจริง
+      const pw = loginPw; loginPw = "";
+      if (pw && user.email) {
+        $("blkText").textContent = "กำลังค้นหาทีมของคุณ..."; screen("scBlocked");
+        const id = await findTeam(user.email, pw);
+        if (id) { await signOut(auth); return goTeam(id); }
+      } else if (!pw && user.email) {
+        // เข้าค้างไว้จากครั้งก่อน (ไม่มีรหัสผ่านให้ค้นหา) → ให้ล็อกอินใหม่ ระบบจะค้นหาทีมให้
+        await signOut(auth);
+        msg("liMsg", "ไม่พบรายชื่อในทีมนี้ — กรอกอีเมลและรหัสผ่านอีกครั้ง ระบบจะค้นหาทีมที่ถูกต้องให้", "ok");
+        return;
+      }
+      return blocked("บัญชีนี้ยังไม่ได้ลงทะเบียนในระบบ กรุณาติดต่อหัวหน้า");
+    }
     profile = snap.data();
     if (profile.active === false) return blocked("บัญชีนี้ถูกระงับการใช้งาน กรุณาติดต่อหัวหน้า");
     // ค้างการเข้าสู่ระบบไว้ 3 เดือน → ครบแล้วให้ออก เข้าสู่ระบบใหม่ และตั้งรหัสผ่านใหม่
@@ -89,6 +104,7 @@ $("btnLogin").onclick = async () => {
   try { localStorage.setItem("amci_last_email", email); } catch (e) {}
   if (!email || !pw) return msg("liMsg", "กรุณากรอกอีเมลและรหัสผ่าน");
   busy($("btnLogin"), true);
+  loginPw = pw; // ใช้ค้นหาทีมที่ถูกต้อง ถ้าทีมนี้ไม่มีรายชื่อ (ไม่เก็บลงเครื่อง)
   try { await signInWithEmailAndPassword(auth, email, pw); msg("liMsg", ""); }
   catch (e) {
     if (["auth/invalid-credential", "auth/user-not-found", "auth/wrong-password"].includes(e.code)) {
