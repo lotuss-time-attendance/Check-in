@@ -229,3 +229,19 @@ th{background:#f4f7fe;color:var(--brand-2)}
 .geo-help ol{margin:6px 0 10px;padding-left:20px}
 .geo-help li{margin:4px 0}
 .geo-help .btn{width:100%}
+
+/* หน้า RM: ตัวกรองตำแหน่งแบบเลือกหลายรายการ */
+.rm-filters{margin-top:10px}
+.msel-wrap{display:flex;flex-direction:column;gap:4px;position:relative;margin:10px 0 0}
+.msel-wrap .lbl{font-size:.9rem;color:var(--muted)}
+.msel summary{list-style:none;cursor:pointer;border:1px solid var(--line);border-radius:10px;padding:11px 12px;background:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.msel summary::-webkit-details-marker{display:none}
+.msel summary::after{content:"▾";float:right;color:var(--muted)}
+.msel[open] summary{border-color:var(--brand)}
+.msel-pop{position:absolute;z-index:50;left:0;right:0;min-width:240px;margin-top:4px;background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:0 8px 24px rgba(11,46,122,.15);padding:10px;max-height:320px;overflow:auto}
+.msel-act{display:flex;gap:6px;margin-bottom:6px}
+.msel-act .btn{width:auto;flex:1}
+.msel-pop label{display:flex;align-items:center;gap:8px;padding:6px 4px;font-weight:500;margin:0;cursor:pointer}
+.msel-pop label input{width:18px;height:18px;margin:0}
+.msel-pop label .n{margin-left:auto;color:var(--muted);font-size:.85rem}
+.roster .tm{min-width:110px;text-align:left}

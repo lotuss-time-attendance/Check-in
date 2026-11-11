@@ -43,18 +43,51 @@
         <button id="btnXlsx" class="btn">📊 ดาวน์โหลด Excel</button>
       </div>
       <p class="msg" id="dMsg"></p>
-    </div>
-    <div class="stats" id="rmKpi"></div>
-    <div class="card"><h3>วันนี้</h3><div class="tbl-wrap"><table id="rmToday"></table></div></div>
-    <div class="card"><h3>สรุปตามทีม (AM)</h3><div class="tbl-wrap"><table id="rmTeams"></table></div></div>
-    <div class="card"><h3>สรุปตามสาขา</h3><div class="tbl-wrap"><table id="rmBranches"></table></div></div>
-    <div class="card">
-      <h3>รายคน</h3>
-      <div class="grid">
+      <!-- ตัวกรอง (ใช้ร่วมทุกแท็บ) — ตำแหน่งอยู่หน้าสุด เลือกได้หลายตำแหน่ง -->
+      <div class="grid rm-filters">
+        <div class="msel-wrap"><span class="lbl">ตำแหน่ง</span>
+          <details class="msel" id="posBox"><summary id="posSum">ทุกตำแหน่ง</summary>
+            <div class="msel-pop"><div class="msel-act"><button type="button" class="btn sm" id="posAll">เลือกทั้งหมด</button><button type="button" class="btn sm" id="posNone">ล้าง (= ทุกตำแหน่ง)</button></div><div id="posList"></div></div>
+          </details>
+        </div>
         <label>ทีม<select id="rmTeamF"></select></label>
+        <label>สาขา<select id="rmBranchF"></select></label>
         <label>ค้นหา<input id="rmSearch" placeholder="ชื่อ / สาขา"></label>
       </div>
-      <div class="tbl-wrap"><table id="rmPeople"></table></div>
+    </div>
+
+    <nav class="tabs" id="rmTabs">
+      <button data-t="day" class="on">สรุปรายวัน</button>
+      <button data-t="sum">สรุปทั้งเดือน</button>
+      <button data-t="roster">ตารางกะ</button>
+    </nav>
+
+    <!-- สรุปรายวัน (แบบหน้า AM) -->
+    <div id="rt-day">
+      <div class="card">
+        <div class="grid"><label>วันที่<input id="rmDay" type="date"></label></div>
+        <h3 id="dyTitle" style="margin-top:6px"></h3>
+        <div class="chips" id="dyChips"></div>
+        <div class="tbl-wrap"><table id="rmToday"></table></div>
+      </div>
+      <div class="card"><h3>รายคน</h3><div class="tbl-wrap scroll-y"><table id="dyPeople"></table></div></div>
+    </div>
+
+    <!-- สรุปทั้งเดือน -->
+    <div id="rt-sum" class="hidden">
+      <div class="stats" id="rmKpi"></div>
+      <div class="card"><h3>สรุปตามทีม (AM)</h3><div class="tbl-wrap"><table id="rmTeams"></table></div></div>
+      <div class="card"><h3>สรุปตามสาขา</h3><div class="tbl-wrap scroll-y"><table id="rmBranches"></table></div></div>
+      <div class="card"><h3>รายคน</h3><div class="tbl-wrap scroll-y"><table id="rmPeople"></table></div></div>
+    </div>
+
+    <!-- ตารางกะ -->
+    <div id="rt-roster" class="hidden">
+      <div class="card">
+        <h3>ตารางกะ (ภาพรวมทั้งเดือน · ดูอย่างเดียว)</h3>
+        <div class="ro-legend"><span><i class="r-work"></i>กะทำงาน (ตัวเลข = ชั่วโมงเข้างาน)</span><span><i class="r-off"></i>H วันหยุด</span><span><i class="r-leave"></i>ลา / พักร้อน</span><span><i class="r-train"></i>T/MT อบรม · Visit · On duty</span><span><i class="r-branch"></i>รหัสสาขา = ต่างสาขา</span><span><i class="r-edit"></i>แก้/สลับแล้ว</span></div>
+        <div class="tbl-wrap scroll-y roster"><table id="rmRoster"></table></div>
+      </div>
     </div>
   </section>
 </main>
